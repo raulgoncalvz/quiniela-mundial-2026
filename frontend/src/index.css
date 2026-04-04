@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+  html { -webkit-tap-highlight-color: transparent; }
+  body {
+    @apply bg-wc-light-bg text-wc-dark font-sans;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Safe area for iOS notch / bottom bar */
+  #root {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-wc-blue text-white font-semibold py-3 px-6 rounded-2xl
+           transition-all duration-200 active:scale-95
+           hover:bg-wc-blue-dark shadow-wc disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-red {
+    @apply bg-wc-red text-white font-semibold py-3 px-6 rounded-2xl
+           transition-all duration-200 active:scale-95
+           hover:bg-wc-red-dark shadow-md disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-gold {
+    @apply bg-wc-gold text-white font-semibold py-3 px-6 rounded-2xl
+           transition-all duration-200 active:scale-95
+           hover:bg-wc-gold-dark shadow-md disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .card {
+    @apply bg-white rounded-2xl shadow-card p-4;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-wc-blue
+           focus:border-transparent outline-none transition-all text-wc-dark bg-white;
+  }
+
+  .score-input {
+    @apply w-12 h-12 text-center text-xl font-bold rounded-xl border-2 border-gray-200
+           focus:border-wc-blue focus:ring-2 focus:ring-wc-blue/20 outline-none transition-all
+           bg-wc-light-bg text-wc-dark;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+
+  .badge-blue { @apply badge bg-blue-100 text-wc-blue; }
+  .badge-red  { @apply badge bg-red-100 text-wc-red; }
+  .badge-gold { @apply badge bg-amber-100 text-wc-gold-dark; }
+  .badge-gray { @apply badge bg-gray-100 text-gray-600; }
+  .badge-green { @apply badge bg-green-100 text-green-700; }
+
+  .nav-item {
+    @apply relative flex flex-col items-center justify-center gap-1 py-2 px-4 rounded-xl
+           transition-all duration-200 min-w-0 flex-1;
+  }
+
+  .page-container {
+    @apply max-w-lg mx-auto pb-24 pt-4 px-4 min-h-screen;
+  }
+
+  .section-title {
+    @apply text-base font-bold text-wc-dark flex items-center gap-2 mb-3;
+  }
+}
+
+/* Scrollbar personalizado */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { @apply bg-gray-300 rounded-full; }
+
+/* Ocultar scrollbar horizontal en tabs */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+/* Animación de entrada para las páginas */
+.page-enter { animation: slideUp 0.25s ease-out; }
+
+/* Quitar flechas de inputs number */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=number] { -moz-appearance: textfield; }

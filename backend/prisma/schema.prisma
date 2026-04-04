@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 Int                  @id @default(autoincrement())
+  name               String
+  email              String               @unique
+  password           String
+  role               String               @default("user")
+  createdAt          DateTime             @default(now())
+  predictions        Prediction[]
+  championPrediction ChampionPrediction?
+}
+
+model Team {
+  id          Int     @id @default(autoincrement())
+  name        String
+  group       String
+  flag        String
+  homeMatches Match[] @relation("HomeTeam")
+  awayMatches Match[] @relation("AwayTeam")
+}
+
+model Match {
+  id          Int          @id @default(autoincrement())
+  matchNumber Int          @unique
+  phase       String
+  group       String?
+  matchday    Int?
+  homeTeamId  Int?
+  awayTeamId  Int?
+  homeTeam    Team?        @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam    Team?        @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  homeScore   Int?
+  awayScore   Int?
+  date        DateTime
+  venue       String?
+  city        String?
+  status      String       @default("pending")
+  label       String?
+  predictions Prediction[]
+}
+
+model Prediction {
+  id        Int   @id @default(autoincrement())
+  userId    Int
+  matchId   Int
+  homeScore Int
+  awayScore Int
+  points    Int   @default(0)
+  user      User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  match     Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, matchId])
+}
+
+model ChampionPrediction {
+  id          Int    @id @default(autoincrement())
+  userId      Int    @unique
+  champion    String @default("")
+  runnerUp    String @default("")
+  third       String @default("")
+  topScorer1  String @default("")
+  topScorer2  String @default("")
+  topScorer3  String @default("")
+  bestPlayer1 String @default("")
+  bestPlayer2 String @default("")
+  bestPlayer3 String @default("")
+  points      Int    @default(0)
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
