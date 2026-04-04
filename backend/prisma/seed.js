@@ -175,12 +175,14 @@ const KNOCKOUT_MATCHES = [
 // MAIN SEED
 // =============================================
 async function main() {
-  console.log('🧹 Limpiando base de datos...');
-  await prisma.prediction.deleteMany();
-  await prisma.championPrediction.deleteMany();
-  await prisma.match.deleteMany();
-  await prisma.team.deleteMany();
-  await prisma.user.deleteMany();
+  // Si ya hay equipos, no volvemos a sembrar (idempotente)
+  const existing = await prisma.team.count();
+  if (existing > 0) {
+    console.log(`✅ Base de datos ya tiene datos (${existing} equipos). Seed omitido.`);
+    return;
+  }
+
+  console.log('🌱 Sembrando base de datos por primera vez...');
 
   // -------- Usuarios --------
   console.log('👤 Creando usuarios...');
