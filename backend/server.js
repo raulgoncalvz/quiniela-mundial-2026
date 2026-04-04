@@ -1,8 +1,20 @@
 require('dotenv').config();
+const { execSync } = require('child_process');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+
+// ── Setup DB en arranque ──────────────────────────────────────────
+try {
+  console.log('🔄 Sincronizando base de datos...');
+  execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
+  console.log('🌱 Ejecutando seed...');
+  execSync('node prisma/seed.js', { stdio: 'inherit' });
+} catch (err) {
+  console.error('⚠️  Error en setup DB:', err.message);
+}
+// ─────────────────────────────────────────────────────────────────
 
 const app = express();
 const PORT = process.env.PORT || 3001;
