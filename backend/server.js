@@ -5,14 +5,11 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
-// ── Setup DB en arranque ──────────────────────────────────────────
+// ── Seed en arranque (schema ya está en Supabase) ────────────────
 try {
-  console.log('🔄 Sincronizando base de datos...');
-  execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
-  console.log('🌱 Ejecutando seed...');
   execSync('node prisma/seed.js', { stdio: 'inherit' });
 } catch (err) {
-  console.error('⚠️  Error en setup DB:', err.message);
+  console.error('⚠️  Error en seed:', err.message);
 }
 // ─────────────────────────────────────────────────────────────────
 
