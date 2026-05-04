@@ -5,11 +5,20 @@ const admin = require('../middleware/admin');
 
 const prisma = new PrismaClient();
 
-function calculatePoints(actualHome, actualAway, predHome, predAway) {
-  if (predHome === actualHome && predAway === actualAway) return 3;
+function calculatePoints(actualHome, actualAway, predHome, predAway, exactScore = 3, correctResult = 1) {
+  if (predHome === actualHome && predAway === actualAway) return exactScore;
   const actual = actualHome > actualAway ? 'H' : actualHome < actualAway ? 'A' : 'D';
   const pred = predHome > predAway ? 'H' : predHome < predAway ? 'A' : 'D';
-  return actual === pred ? 1 : 0;
+  return actual === pred ? correctResult : 0;
+}
+
+async function getScoringConfig(phase) {
+  try {
+    const cfg = await prisma.scoringConfig.findUnique({ where: { phase } });
+    return cfg || { exactScore: 3, correctResult: 1 };
+  } catch {
+    return { exactScore: 3, correctResult: 1 };
+  }
 }
 
 // GET /api/matches
@@ -116,13 +125,16 @@ router.put('/:id/result', auth, admin, async (req, res) => {
     });
 
     // Recalculate points for all predictions of this match
+    const cfg = await getScoringConfig(match.phase);
     const predictions = await prisma.prediction.findMany({ where: { matchId } });
     for (const pred of predictions) {
       const points = calculatePoints(
         parseInt(homeScore),
         parseInt(awayScore),
         pred.homeScore,
-        pred.awayScore
+        pred.awayScore,
+        cfg.exactScore,
+        cfg.correctResult
       );
       await prisma.prediction.update({ where: { id: pred.id }, data: { points } });
     }

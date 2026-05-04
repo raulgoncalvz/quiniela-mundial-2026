@@ -31,6 +31,7 @@ app.use('/api/matches', require('./src/routes/matches'));
 app.use('/api/predictions', require('./src/routes/predictions'));
 app.use('/api/ranking', require('./src/routes/ranking'));
 app.use('/api/teams', require('./src/routes/teams'));
+app.use('/api/config', require('./src/routes/config'));
 
 app.get('/health', (req, res) => res.json({ ok: true, time: new Date() }));
 

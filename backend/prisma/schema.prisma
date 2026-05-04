@@ -75,6 +75,14 @@ model Prediction {
   @@unique([userId, matchId])
 }
 
+model ScoringConfig {
+  id            Int    @id @default(autoincrement())
+  phase         String @unique
+  label         String @default("")
+  exactScore    Int    @default(3)
+  correctResult Int    @default(1)
+}
+
 model ChampionPrediction {
   id          Int    @id @default(autoincrement())
   userId      Int    @unique
