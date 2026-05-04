@@ -5,14 +5,32 @@ import api from '../lib/axios';
 import Spinner from '../components/Spinner';
 
 const PHASES = [
-  { key: 'groups',   label: 'Grupos' },
-  { key: 'round32',  label: 'Ronda 32' },
-  { key: 'round16',  label: 'Octavos' },
-  { key: 'quarters', label: 'Cuartos' },
-  { key: 'semis',    label: 'Semis' },
-  { key: 'third',    label: '3er Lugar' },
-  { key: 'final',    label: 'Final' },
+  { key: 'groups',    label: 'Grupos' },
+  { key: 'positions', label: 'Posiciones' },
+  { key: 'round32',   label: 'Ronda 32' },
+  { key: 'round16',   label: 'Octavos' },
+  { key: 'quarters',  label: 'Cuartos' },
+  { key: 'semis',     label: 'Semis' },
+  { key: 'third',     label: '3er Lugar' },
+  { key: 'final',     label: 'Final' },
 ];
+
+const GROUP_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+
+const GROUP_TEAMS = {
+  A: ['México', 'Sudáfrica', 'Corea del Sur', 'Rep. Checa'],
+  B: ['Canadá', 'Bosnia-Herz.', 'Catar', 'Suiza'],
+  C: ['Brasil', 'Marruecos', 'Haití', 'Escocia'],
+  D: ['Estados Unidos', 'Paraguay', 'Australia', 'Turquía'],
+  E: ['Alemania', 'Curazao', 'Costa de Marfil', 'Ecuador'],
+  F: ['Países Bajos', 'Japón', 'Suecia', 'Túnez'],
+  G: ['Bélgica', 'Egipto', 'Irán', 'Nueva Zelanda'],
+  H: ['España', 'Cabo Verde', 'Arabia Saudita', 'Uruguay'],
+  I: ['Francia', 'Senegal', 'Irak', 'Noruega'],
+  J: ['Argentina', 'Argelia', 'Austria', 'Jordania'],
+  K: ['Portugal', 'RD Congo', 'Uzbekistán', 'Colombia'],
+  L: ['Inglaterra', 'Croacia', 'Ghana', 'Panamá'],
+};
 
 export default function Admin() {
   const [phase, setPhase] = useState('groups');
@@ -20,8 +38,27 @@ export default function Admin() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState({});
   const [results, setResults] = useState({});
+  const [adminGroup, setAdminGroup] = useState('A');
+  const [standingForms, setStandingForms] = useState({});
+  const [savingStandings, setSavingStandings] = useState(false);
+
+  const handleSaveStandings = async () => {
+    const form = standingForms[adminGroup] || {};
+    if (!form.pos1 || !form.pos2 || !form.pos3 || !form.pos4)
+      return toast.error('Completa las 4 posiciones finales');
+    setSavingStandings(true);
+    try {
+      const { data } = await api.post(`/matches/groups/${adminGroup}/standings`, form);
+      toast.success(`✅ Grupo ${adminGroup}: puntos calculados para ${data.updated} usuarios`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al calcular');
+    } finally {
+      setSavingStandings(false);
+    }
+  };
 
   const loadMatches = async () => {
+    if (phase === 'positions') { setLoading(false); return; }
     setLoading(true);
     try {
       const { data } = await api.get(`/matches?phase=${phase}`);
@@ -120,10 +157,63 @@ export default function Admin() {
         ))}
       </div>
 
-      {/* Matches */}
-      {loading ? (
+      {/* ── Posiciones finales de grupo (admin) ── */}
+      {phase === 'positions' && (
+        <div className="space-y-4">
+          <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
+            {GROUP_LETTERS.map(g => (
+              <button key={g} onClick={() => setAdminGroup(g)}
+                className={`w-9 h-9 flex-shrink-0 rounded-xl text-xs font-black transition-all ${
+                  adminGroup === g ? 'bg-wc-red text-white shadow-md' : 'bg-white text-gray-500 border border-gray-200'
+                }`}>{g}</button>
+            ))}
+          </div>
+
+          <div className="card">
+            <h3 className="font-bold text-wc-dark mb-1">Grupo {adminGroup} — Clasificación Final</h3>
+            <p className="text-xs text-gray-400 mb-4">Ingresa el orden final real para calcular puntos de todos los usuarios</p>
+
+            <div className="space-y-3">
+              {[
+                { pos: 'pos1', label: '🥇 1er Lugar' },
+                { pos: 'pos2', label: '🥈 2do Lugar' },
+                { pos: 'pos3', label: '🥉 3er Lugar' },
+                { pos: 'pos4', label: '4️⃣  4to Lugar' },
+              ].map(({ pos, label }) => {
+                const form = standingForms[adminGroup] || {};
+                const selected = form[pos] || '';
+                const otherSelected = ['pos1','pos2','pos3','pos4']
+                  .filter(p => p !== pos).map(p => form[p]).filter(Boolean);
+                return (
+                  <div key={pos}>
+                    <label className="text-xs font-bold text-gray-600 block mb-1">{label}</label>
+                    <select value={selected}
+                      onChange={e => setStandingForms(prev => ({
+                        ...prev, [adminGroup]: { ...prev[adminGroup], [pos]: e.target.value },
+                      }))}
+                      className="w-full text-sm rounded-xl border border-gray-200 py-2 px-3 focus:ring-2 focus:ring-wc-red outline-none bg-wc-light-bg"
+                    >
+                      <option value="">Seleccionar equipo</option>
+                      {(GROUP_TEAMS[adminGroup] || []).map(t => (
+                        <option key={t} value={t} disabled={otherSelected.includes(t)}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button onClick={handleSaveStandings} disabled={savingStandings}
+              className="btn-primary w-full mt-4 flex items-center justify-center gap-2">
+              {savingStandings ? <Spinner size="sm" color="white" /> : `🏆 Calcular Puntos Grupo ${adminGroup}`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {phase !== 'positions' && loading ? (
         <div className="flex justify-center py-12"><Spinner size="lg" /></div>
-      ) : matches.length === 0 ? (
+      ) : phase !== 'positions' && matches.length === 0 ? (
         <div className="card text-center py-12 text-gray-400">
           <p>No hay partidos en esta fase</p>
         </div>

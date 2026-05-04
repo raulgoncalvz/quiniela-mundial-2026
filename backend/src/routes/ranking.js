@@ -11,6 +11,7 @@ router.get('/', async (req, res) => {
       include: {
         predictions: { select: { points: true, matchId: true, match: { select: { status: true } } } },
         championPrediction: { select: { points: true } },
+        groupPredictions: { select: { points: true } },
       },
     });
 
@@ -19,15 +20,17 @@ router.get('/', async (req, res) => {
         const finishedPreds = user.predictions.filter(p => p.match.status === 'finished');
         const matchPoints = finishedPreds.reduce((sum, p) => sum + p.points, 0);
         const champPoints = user.championPrediction?.points || 0;
+        const groupPoints = user.groupPredictions.reduce((sum, p) => sum + p.points, 0);
         const exactScores = finishedPreds.filter(p => p.points === 3).length;
         const correctResults = finishedPreds.filter(p => p.points >= 1).length;
 
         return {
           id: user.id,
           name: user.name,
-          totalPoints: matchPoints + champPoints,
+          totalPoints: matchPoints + champPoints + groupPoints,
           matchPoints,
           championPoints: champPoints,
+          groupPoints,
           totalPredictions: user.predictions.length,
           exactScores,
           correctResults,

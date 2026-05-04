@@ -151,4 +151,25 @@ router.put('/:id/status', auth, admin, async (req, res) => {
   }
 });
 
+// POST /api/matches/groups/:group/standings — Admin calcula puntos de posición
+router.post('/groups/:group/standings', auth, admin, async (req, res) => {
+  const group = req.params.group.toUpperCase();
+  const { pos1, pos2, pos3, pos4 } = req.body;
+  if (!pos1 || !pos2 || !pos3 || !pos4)
+    return res.status(400).json({ error: 'Las 4 posiciones finales son requeridas' });
+
+  try {
+    const preds = await prisma.groupPrediction.findMany({ where: { group } });
+    for (const pred of preds) {
+      const points = (pred.pos1 === pos1 ? 2 : 0) + (pred.pos2 === pos2 ? 2 : 0)
+                   + (pred.pos3 === pos3 ? 2 : 0) + (pred.pos4 === pos4 ? 2 : 0);
+      await prisma.groupPrediction.update({ where: { id: pred.id }, data: { points } });
+    }
+    res.json({ group, pos1, pos2, pos3, pos4, updated: preds.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
 module.exports = router;

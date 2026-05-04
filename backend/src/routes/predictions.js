@@ -95,6 +95,42 @@ router.post('/batch', auth, async (req, res) => {
   }
 });
 
+// GET /api/predictions/groups
+router.get('/groups', auth, async (req, res) => {
+  try {
+    const preds = await prisma.groupPrediction.findMany({ where: { userId: req.user.id } });
+    res.json(preds);
+  } catch (err) {
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
+// POST /api/predictions/groups/:group
+router.post('/groups/:group', auth, async (req, res) => {
+  const group = req.params.group.toUpperCase();
+  const { pos1, pos2, pos3, pos4 } = req.body;
+  if (!['A','B','C','D','E','F','G','H','I','J','K','L'].includes(group))
+    return res.status(400).json({ error: 'Grupo inválido' });
+
+  try {
+    const started = await prisma.match.findFirst({
+      where: { group, phase: 'groups', status: { not: 'pending' } },
+    });
+    if (started)
+      return res.status(400).json({ error: 'El grupo ya comenzó, no puedes modificar la predicción' });
+
+    const pred = await prisma.groupPrediction.upsert({
+      where: { userId_group: { userId: req.user.id, group } },
+      update: { pos1: pos1 || '', pos2: pos2 || '', pos3: pos3 || '', pos4: pos4 || '' },
+      create: { userId: req.user.id, group, pos1: pos1 || '', pos2: pos2 || '', pos3: pos3 || '', pos4: pos4 || '' },
+    });
+    res.json(pred);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
 // GET /api/predictions/champion
 router.get('/champion', auth, async (req, res) => {
   try {
