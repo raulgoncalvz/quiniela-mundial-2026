@@ -36,11 +36,16 @@ export default function Ranking() {
   const [ranking, setRanking] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [currentScoring, setCurrentScoring] = useState(null);
 
   useEffect(() => {
-    api.get('/ranking')
-      .then(res => setRanking(res.data))
-      .catch(console.error)
+    Promise.all([
+      api.get('/ranking'),
+      api.get('/config/scoring/current'),
+    ]).then(([rk, sc]) => {
+      setRanking(rk.data);
+      setCurrentScoring(sc.data);
+    }).catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
@@ -189,20 +194,31 @@ export default function Ranking() {
         )}
       </div>
 
-      {/* Legend */}
+      {/* Legend — dynamic based on current active phase */}
       <div className="mt-6 card bg-wc-light-bg">
-        <p className="text-xs font-bold text-gray-600 mb-2">🎯 Sistema de puntuación</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-bold text-gray-600">🎯 Puntuación actual</p>
+          {currentScoring && (
+            <span className="text-xs bg-wc-blue text-white font-bold px-2 py-0.5 rounded-full">
+              {currentScoring.label}
+            </span>
+          )}
+        </div>
         <div className="space-y-1 text-xs text-gray-500">
           <div className="flex justify-between">
             <span>⭐ Marcador exacto</span>
-            <span className="font-bold text-amber-600">puntos según fase</span>
+            <span className="font-black text-amber-600">
+              +{currentScoring?.exactScore ?? '—'} pts
+            </span>
           </div>
           <div className="flex justify-between">
             <span>✓ Resultado correcto</span>
-            <span className="font-bold text-wc-blue">puntos según fase</span>
+            <span className="font-black text-wc-blue">
+              +{currentScoring?.correctResult ?? '—'} pt{currentScoring?.correctResult !== 1 ? 's' : ''}
+            </span>
           </div>
           <div className="flex justify-between">
-            <span>📊 Posición grupo exacta</span>
+            <span>📊 Posición de grupo exacta</span>
             <span className="font-bold text-green-600">+2 pts</span>
           </div>
           <div className="flex justify-between">

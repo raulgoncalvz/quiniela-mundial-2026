@@ -21,6 +21,35 @@ const DEFAULT_CONFIGS = [
   { phase: 'bet_goalkeeper', label: '🧤 Mejor Portero',    exactScore: 5,  correctResult: 0 },
 ];
 
+// GET /api/config/scoring/current — public, returns active phase scoring
+router.get('/scoring/current', async (req, res) => {
+  try {
+    // 1. Live match?
+    let activeMatch = await prisma.match.findFirst({ where: { status: 'live' }, orderBy: { date: 'asc' } });
+    // 2. Next pending match?
+    if (!activeMatch)
+      activeMatch = await prisma.match.findFirst({ where: { status: 'pending' }, orderBy: { date: 'asc' } });
+    // 3. Last finished match?
+    if (!activeMatch)
+      activeMatch = await prisma.match.findFirst({ where: { status: 'finished' }, orderBy: { date: 'desc' } });
+
+    const phase = activeMatch?.phase || 'groups';
+
+    const PHASE_LABELS = {
+      groups: 'Fase de Grupos', round32: 'Ronda de 32', round16: 'Octavos de Final',
+      quarters: 'Cuartos de Final', semis: 'Semifinales', third: 'Tercer Lugar', final: 'Final',
+    };
+
+    let cfg = await prisma.scoringConfig.findUnique({ where: { phase } });
+    if (!cfg) cfg = { phase, label: PHASE_LABELS[phase] || phase, exactScore: 3, correctResult: 1 };
+
+    res.json({ phase, label: PHASE_LABELS[phase] || cfg.label, exactScore: cfg.exactScore, correctResult: cfg.correctResult });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
 // GET /api/config/scoring
 router.get('/scoring', auth, admin, async (req, res) => {
   try {
