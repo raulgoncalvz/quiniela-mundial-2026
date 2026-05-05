@@ -145,27 +145,27 @@ const KNOCKOUT_MATCHES = [
   { matchNumber: 87,  phase: 'round32', label: '1K vs 3er', date: '2026-07-04T03:30:00Z', city: 'Miami',            venue: 'Hard Rock Stadium' },
 
   // Octavos de final — 8 partidos
-  { matchNumber: 90,  phase: 'round16', label: 'Octavos 1', date: '2026-07-04T18:00:00Z', city: 'Los Ángeles',     venue: 'SoFi Stadium' },
-  { matchNumber: 89,  phase: 'round16', label: 'Octavos 2', date: '2026-07-04T21:00:00Z', city: 'Nueva York',      venue: 'MetLife Stadium' },
-  { matchNumber: 91,  phase: 'round16', label: 'Octavos 3', date: '2026-07-05T18:00:00Z', city: 'Dallas',          venue: 'AT&T Stadium' },
-  { matchNumber: 92,  phase: 'round16', label: 'Octavos 4', date: '2026-07-05T21:00:00Z', city: 'Ciudad de México', venue: 'Estadio Azteca' },
-  { matchNumber: 93,  phase: 'round16', label: 'Octavos 5', date: '2026-07-06T18:00:00Z', city: 'Miami',           venue: 'Hard Rock Stadium' },
-  { matchNumber: 94,  phase: 'round16', label: 'Octavos 6', date: '2026-07-06T21:00:00Z', city: 'Toronto',         venue: 'BMO Field' },
+  { matchNumber: 90,  phase: 'round16', label: 'Octavos 1', date: '2026-07-04T19:00:00Z', city: 'Los Ángeles',     venue: 'SoFi Stadium' },
+  { matchNumber: 89,  phase: 'round16', label: 'Octavos 2', date: '2026-07-04T23:00:00Z', city: 'Nueva York',      venue: 'MetLife Stadium' },
+  { matchNumber: 91,  phase: 'round16', label: 'Octavos 3', date: '2026-07-05T22:00:00Z', city: 'Dallas',          venue: 'AT&T Stadium' },
+  { matchNumber: 92,  phase: 'round16', label: 'Octavos 4', date: '2026-07-06T02:00:00Z', city: 'Ciudad de México', venue: 'Estadio Azteca' },
+  { matchNumber: 93,  phase: 'round16', label: 'Octavos 5', date: '2026-07-06T21:00:00Z', city: 'Miami',           venue: 'Hard Rock Stadium' },
+  { matchNumber: 94,  phase: 'round16', label: 'Octavos 6', date: '2026-07-07T02:00:00Z', city: 'Toronto',         venue: 'BMO Field' },
   { matchNumber: 95,  phase: 'round16', label: 'Octavos 7', date: '2026-07-07T18:00:00Z', city: 'Boston',          venue: 'Gillette Stadium' },
-  { matchNumber: 96,  phase: 'round16', label: 'Octavos 8', date: '2026-07-07T21:00:00Z', city: 'Seattle',         venue: 'Lumen Field' },
+  { matchNumber: 96,  phase: 'round16', label: 'Octavos 8', date: '2026-07-07T22:00:00Z', city: 'Seattle',         venue: 'Lumen Field' },
 
   // Cuartos de final — 4 partidos
-  { matchNumber: 97,  phase: 'quarters', label: 'Cuartos 1', date: '2026-07-09T18:00:00Z', city: 'Nueva York',     venue: 'MetLife Stadium' },
+  { matchNumber: 97,  phase: 'quarters', label: 'Cuartos 1', date: '2026-07-09T22:00:00Z', city: 'Nueva York',     venue: 'MetLife Stadium' },
   { matchNumber: 98,  phase: 'quarters', label: 'Cuartos 2', date: '2026-07-10T21:00:00Z', city: 'Los Ángeles',    venue: 'SoFi Stadium' },
-  { matchNumber: 99,  phase: 'quarters', label: 'Cuartos 3', date: '2026-07-11T18:00:00Z', city: 'Dallas',         venue: 'AT&T Stadium' },
-  { matchNumber: 100, phase: 'quarters', label: 'Cuartos 4', date: '2026-07-11T21:00:00Z', city: 'Miami',          venue: 'Hard Rock Stadium' },
+  { matchNumber: 99,  phase: 'quarters', label: 'Cuartos 3', date: '2026-07-11T23:00:00Z', city: 'Dallas',         venue: 'AT&T Stadium' },
+  { matchNumber: 100, phase: 'quarters', label: 'Cuartos 4', date: '2026-07-12T03:00:00Z', city: 'Miami',          venue: 'Hard Rock Stadium' },
 
   // Semifinales — 2 partidos
   { matchNumber: 101, phase: 'semis', label: 'Semifinal 1', date: '2026-07-14T21:00:00Z', city: 'Dallas',          venue: 'AT&T Stadium' },
   { matchNumber: 102, phase: 'semis', label: 'Semifinal 2', date: '2026-07-15T21:00:00Z', city: 'Nueva York',      venue: 'MetLife Stadium' },
 
   // Tercer puesto
-  { matchNumber: 103, phase: 'third', label: '3er y 4to puesto', date: '2026-07-18T21:00:00Z', city: 'Miami',      venue: 'Hard Rock Stadium' },
+  { matchNumber: 103, phase: 'third', label: '3er y 4to puesto', date: '2026-07-18T23:00:00Z', city: 'Miami',      venue: 'Hard Rock Stadium' },
 
   // Final
   { matchNumber: 104, phase: 'final', label: 'FINAL', date: '2026-07-19T21:00:00Z', city: 'Nueva York',            venue: 'MetLife Stadium' },

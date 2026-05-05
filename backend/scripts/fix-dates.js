@@ -23,24 +23,24 @@ const CORRECT_DATES = [
   { matchNumber: 86, date: '2026-07-04T00:00:00Z' }, // 1J vs 2H
   { matchNumber: 87, date: '2026-07-04T03:30:00Z' }, // 1K vs 3er
   // Round of 16 (Octavos)
-  { matchNumber: 90, date: '2026-07-04T18:00:00Z' },
-  { matchNumber: 89, date: '2026-07-04T21:00:00Z' },
-  { matchNumber: 91, date: '2026-07-05T18:00:00Z' },
-  { matchNumber: 92, date: '2026-07-05T21:00:00Z' },
-  { matchNumber: 93, date: '2026-07-06T18:00:00Z' },
-  { matchNumber: 94, date: '2026-07-06T21:00:00Z' },
+  { matchNumber: 90, date: '2026-07-04T19:00:00Z' },
+  { matchNumber: 89, date: '2026-07-04T23:00:00Z' },
+  { matchNumber: 91, date: '2026-07-05T22:00:00Z' },
+  { matchNumber: 92, date: '2026-07-06T02:00:00Z' },
+  { matchNumber: 93, date: '2026-07-06T21:00:00Z' },
+  { matchNumber: 94, date: '2026-07-07T02:00:00Z' },
   { matchNumber: 95, date: '2026-07-07T18:00:00Z' },
-  { matchNumber: 96, date: '2026-07-07T21:00:00Z' },
+  { matchNumber: 96, date: '2026-07-07T22:00:00Z' },
   // Quarters
-  { matchNumber: 97,  date: '2026-07-09T18:00:00Z' },
+  { matchNumber: 97,  date: '2026-07-09T22:00:00Z' },
   { matchNumber: 98,  date: '2026-07-10T21:00:00Z' },
-  { matchNumber: 99,  date: '2026-07-11T18:00:00Z' },
-  { matchNumber: 100, date: '2026-07-11T21:00:00Z' },
+  { matchNumber: 99,  date: '2026-07-11T23:00:00Z' },
+  { matchNumber: 100, date: '2026-07-12T03:00:00Z' },
   // Semis
   { matchNumber: 101, date: '2026-07-14T21:00:00Z' },
   { matchNumber: 102, date: '2026-07-15T21:00:00Z' },
   // 3rd place + Final
-  { matchNumber: 103, date: '2026-07-18T21:00:00Z' },
+  { matchNumber: 103, date: '2026-07-18T23:00:00Z' },
   { matchNumber: 104, date: '2026-07-19T21:00:00Z' },
 ];
 
