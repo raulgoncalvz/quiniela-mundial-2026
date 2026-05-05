@@ -7,9 +7,16 @@ const prisma = new PrismaClient();
 router.get('/', async (req, res) => {
   try {
     const users = await prisma.user.findMany({
-      where: { role: 'user' },
       include: {
-        predictions: { select: { points: true, matchId: true, match: { select: { status: true } } } },
+        predictions: {
+          select: {
+            points: true,
+            matchId: true,
+            homeScore: true,
+            awayScore: true,
+            match: { select: { status: true, homeScore: true, awayScore: true } },
+          },
+        },
         championPrediction: { select: { points: true } },
         groupPredictions: { select: { points: true } },
       },
@@ -21,12 +28,19 @@ router.get('/', async (req, res) => {
         const matchPoints = finishedPreds.reduce((sum, p) => sum + p.points, 0);
         const champPoints = user.championPrediction?.points || 0;
         const groupPoints = user.groupPredictions.reduce((sum, p) => sum + p.points, 0);
-        const exactScores = finishedPreds.filter(p => p.points === 3).length;
+
+        // Compare scores directly — works with any scoring config
+        const exactScores = finishedPreds.filter(p =>
+          p.match.homeScore !== null &&
+          p.homeScore === p.match.homeScore &&
+          p.awayScore === p.match.awayScore
+        ).length;
         const correctResults = finishedPreds.filter(p => p.points >= 1).length;
 
         return {
           id: user.id,
           name: user.name,
+          role: user.role,
           totalPoints: matchPoints + champPoints + groupPoints,
           matchPoints,
           championPoints: champPoints,

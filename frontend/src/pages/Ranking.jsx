@@ -48,8 +48,8 @@ export default function Ranking() {
     u.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  const myPosition = ranking.find(u => u.id === user.id);
-  const top3 = ranking.slice(0, 3);
+  const myPosition = ranking.find(u => Number(u.id) === Number(user.id));
+  const top3 = ranking.filter(u => u.role !== 'admin').slice(0, 3);
 
   if (loading) {
     return <div className="flex items-center justify-center h-64"><Spinner size="lg" /></div>;
@@ -125,7 +125,7 @@ export default function Ranking() {
           </div>
         ) : (
           filtered.map(u => {
-            const isMe = u.id === user.id;
+            const isMe = Number(u.id) === Number(user.id);
             const medal = u.position <= 3 ? MEDALS[u.position - 1] : null;
 
             return (
@@ -159,8 +159,15 @@ export default function Ranking() {
                     {u.name} {isMe && <span className="text-xs font-normal">(Tú)</span>}
                   </p>
                   <p className="text-xs text-gray-400">
-                    {u.totalPredictions} pronósticos · {u.accuracy}% aciertos
+                    {u.exactScores} exactos · {u.accuracy}% precisión
                   </p>
+                  {(u.groupPoints > 0 || u.championPoints > 0) && (
+                    <p className="text-xs text-gray-300">
+                      {u.matchPoints}p partidos
+                      {u.groupPoints > 0 ? ` · ${u.groupPoints}p grupos` : ''}
+                      {u.championPoints > 0 ? ` · ${u.championPoints}p especiales` : ''}
+                    </p>
+                  )}
                 </div>
 
                 {/* Exact scores */}
@@ -188,11 +195,15 @@ export default function Ranking() {
         <div className="space-y-1 text-xs text-gray-500">
           <div className="flex justify-between">
             <span>⭐ Marcador exacto</span>
-            <span className="font-bold text-amber-600">+3 pts</span>
+            <span className="font-bold text-amber-600">puntos según fase</span>
           </div>
           <div className="flex justify-between">
             <span>✓ Resultado correcto</span>
-            <span className="font-bold text-wc-blue">+1 pt</span>
+            <span className="font-bold text-wc-blue">puntos según fase</span>
+          </div>
+          <div className="flex justify-between">
+            <span>📊 Posición grupo exacta</span>
+            <span className="font-bold text-green-600">+2 pts</span>
           </div>
           <div className="flex justify-between">
             <span>✗ Resultado errado</span>
