@@ -18,21 +18,6 @@ const PHASES = [
 
 const GROUP_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L'];
 
-const GROUP_TEAMS = {
-  A: ['México', 'Sudáfrica', 'Corea del Sur', 'Rep. Checa'],
-  B: ['Canadá', 'Bosnia-Herz.', 'Catar', 'Suiza'],
-  C: ['Brasil', 'Marruecos', 'Haití', 'Escocia'],
-  D: ['Estados Unidos', 'Paraguay', 'Australia', 'Turquía'],
-  E: ['Alemania', 'Curazao', 'Costa de Marfil', 'Ecuador'],
-  F: ['Países Bajos', 'Japón', 'Suecia', 'Túnez'],
-  G: ['Bélgica', 'Egipto', 'Irán', 'Nueva Zelanda'],
-  H: ['España', 'Cabo Verde', 'Arabia Saudita', 'Uruguay'],
-  I: ['Francia', 'Senegal', 'Irak', 'Noruega'],
-  J: ['Argentina', 'Argelia', 'Austria', 'Jordania'],
-  K: ['Portugal', 'RD Congo', 'Uzbekistán', 'Colombia'],
-  L: ['Inglaterra', 'Croacia', 'Ghana', 'Panamá'],
-};
-
 export default function Admin() {
   const [phase, setPhase] = useState('groups');
   const [matches, setMatches] = useState([]);
@@ -40,20 +25,31 @@ export default function Admin() {
   const [updating, setUpdating] = useState({});
   const [results, setResults] = useState({});
   const [adminGroup, setAdminGroup] = useState('A');
-  const [standingForms, setStandingForms] = useState({});
+  const [groupStandings, setGroupStandings] = useState([]);
+  const [loadingStandings, setLoadingStandings] = useState(false);
   const [savingStandings, setSavingStandings] = useState(false);
   const [scoringConfigs, setScoringConfigs] = useState([]);
   const [savingScoring, setSavingScoring] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
 
+  const loadGroupStandings = async (group) => {
+    setLoadingStandings(true);
+    try {
+      const { data } = await api.get(`/matches/groups/${group}/standings`);
+      setGroupStandings(data);
+    } catch {
+      setGroupStandings([]);
+    } finally {
+      setLoadingStandings(false);
+    }
+  };
+
   const handleSaveStandings = async () => {
-    const form = standingForms[adminGroup] || {};
-    if (!form.pos1 || !form.pos2 || !form.pos3 || !form.pos4)
-      return toast.error('Completa las 4 posiciones finales');
     setSavingStandings(true);
     try {
-      const { data } = await api.post(`/matches/groups/${adminGroup}/standings`, form);
+      const { data } = await api.post(`/matches/groups/${adminGroup}/standings`);
       toast.success(`✅ Grupo ${adminGroup}: puntos calculados para ${data.updated} usuarios`);
+      await loadGroupStandings(adminGroup);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al calcular');
     } finally {
@@ -127,6 +123,10 @@ export default function Admin() {
     if (phase === 'scoring') loadScoringConfigs();
     else loadMatches();
   }, [phase]);
+
+  useEffect(() => {
+    if (phase === 'positions') loadGroupStandings(adminGroup);
+  }, [adminGroup, phase]);
 
   const handleResultChange = (matchId, field, value) => {
     setResults(prev => ({
@@ -204,7 +204,7 @@ export default function Admin() {
         ))}
       </div>
 
-      {/* ── Posiciones finales de grupo (admin) ── */}
+      {/* ── Posiciones finales de grupo (auto-calculadas) ── */}
       {phase === 'positions' && (
         <div className="space-y-4">
           <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
@@ -217,43 +217,59 @@ export default function Admin() {
           </div>
 
           <div className="card">
-            <h3 className="font-bold text-wc-dark mb-1">Grupo {adminGroup} — Clasificación Final</h3>
-            <p className="text-xs text-gray-400 mb-4">Ingresa el orden final real para calcular puntos de todos los usuarios</p>
+            <h3 className="font-bold text-wc-dark mb-1">Grupo {adminGroup} — Tabla de Posiciones</h3>
+            <p className="text-xs text-gray-400 mb-3">
+              Posiciones calculadas automáticamente por resultados reales (puntos → dif. de goles → goles a favor)
+            </p>
 
-            <div className="space-y-3">
-              {[
-                { pos: 'pos1', label: '🥇 1er Lugar' },
-                { pos: 'pos2', label: '🥈 2do Lugar' },
-                { pos: 'pos3', label: '🥉 3er Lugar' },
-                { pos: 'pos4', label: '4️⃣  4to Lugar' },
-              ].map(({ pos, label }) => {
-                const form = standingForms[adminGroup] || {};
-                const selected = form[pos] || '';
-                const otherSelected = ['pos1','pos2','pos3','pos4']
-                  .filter(p => p !== pos).map(p => form[p]).filter(Boolean);
-                return (
-                  <div key={pos}>
-                    <label className="text-xs font-bold text-gray-600 block mb-1">{label}</label>
-                    <select value={selected}
-                      onChange={e => setStandingForms(prev => ({
-                        ...prev, [adminGroup]: { ...prev[adminGroup], [pos]: e.target.value },
-                      }))}
-                      className="w-full text-sm rounded-xl border border-gray-200 py-2 px-3 focus:ring-2 focus:ring-wc-red outline-none bg-wc-light-bg"
-                    >
-                      <option value="">Seleccionar equipo</option>
-                      {(GROUP_TEAMS[adminGroup] || []).map(t => (
-                        <option key={t} value={t} disabled={otherSelected.includes(t)}>{t}</option>
-                      ))}
-                    </select>
-                  </div>
-                );
-              })}
-            </div>
+            {loadingStandings ? (
+              <div className="flex justify-center py-6"><Spinner size="md" /></div>
+            ) : groupStandings.length === 0 ? (
+              <p className="text-center text-gray-400 text-sm py-4">No hay partidos finalizados en este grupo</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-gray-400 border-b border-gray-100">
+                      <th className="text-left py-1.5 w-6">#</th>
+                      <th className="text-left py-1.5">Equipo</th>
+                      <th className="text-center py-1.5 w-7">PJ</th>
+                      <th className="text-center py-1.5 w-7">G</th>
+                      <th className="text-center py-1.5 w-7">E</th>
+                      <th className="text-center py-1.5 w-7">P</th>
+                      <th className="text-center py-1.5 w-8">GD</th>
+                      <th className="text-center py-1.5 w-8 font-bold text-wc-dark">Pts</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {groupStandings.map((s) => (
+                      <tr key={s.teamId} className={s.position <= 2 ? 'bg-green-50' : ''}>
+                        <td className="py-2 font-bold text-gray-500">{s.position}</td>
+                        <td className="py-2">
+                          <span className="mr-1">{s.teamFlag}</span>
+                          <span className="font-semibold text-wc-dark">{s.teamName}</span>
+                          {s.position <= 2 && <span className="ml-1 text-green-600 text-xs">✓</span>}
+                        </td>
+                        <td className="py-2 text-center text-gray-500">{s.mp}</td>
+                        <td className="py-2 text-center text-gray-500">{s.w}</td>
+                        <td className="py-2 text-center text-gray-500">{s.d}</td>
+                        <td className="py-2 text-center text-gray-500">{s.l}</td>
+                        <td className="py-2 text-center text-gray-500">{s.gd > 0 ? `+${s.gd}` : s.gd}</td>
+                        <td className="py-2 text-center font-black text-wc-dark">{s.pts}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
-            <button onClick={handleSaveStandings} disabled={savingStandings}
+            <button onClick={handleSaveStandings} disabled={savingStandings || loadingStandings}
               className="btn-primary w-full mt-4 flex items-center justify-center gap-2">
-              {savingStandings ? <Spinner size="sm" color="white" /> : `🏆 Calcular Puntos Grupo ${adminGroup}`}
+              {savingStandings ? <Spinner size="sm" color="white" /> : `🏆 Asignar Puntos — Grupo ${adminGroup}`}
             </button>
+            <p className="text-xs text-gray-400 text-center mt-2">
+              Solo funciona cuando los 6 partidos del grupo están finalizados
+            </p>
           </div>
         </div>
       )}

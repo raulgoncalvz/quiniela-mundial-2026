@@ -163,21 +163,101 @@ router.put('/:id/status', auth, admin, async (req, res) => {
   }
 });
 
-// POST /api/matches/groups/:group/standings — Admin calcula puntos de posición
+// Helper: calculates group standings from finished match results
+async function calculateGroupStandings(group) {
+  const teams = await prisma.team.findMany({ where: { group } });
+  const matches = await prisma.match.findMany({
+    where: { group, phase: 'groups', status: 'finished' },
+  });
+
+  const stats = {};
+  for (const team of teams) {
+    stats[team.id] = { team, mp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
+  }
+
+  for (const match of matches) {
+    if (match.homeScore === null || match.awayScore === null) continue;
+    const home = stats[match.homeTeamId];
+    const away = stats[match.awayTeamId];
+    if (!home || !away) continue;
+
+    home.mp++; away.mp++;
+    home.gf += match.homeScore; home.ga += match.awayScore;
+    away.gf += match.awayScore; away.ga += match.homeScore;
+
+    if (match.homeScore > match.awayScore) {
+      home.w++; home.pts += 3; away.l++;
+    } else if (match.homeScore < match.awayScore) {
+      away.w++; away.pts += 3; home.l++;
+    } else {
+      home.d++; home.pts++;
+      away.d++; away.pts++;
+    }
+  }
+
+  return Object.values(stats).sort((a, b) => {
+    if (b.pts !== a.pts) return b.pts - a.pts;
+    const gdDiff = (b.gf - b.ga) - (a.gf - a.ga);
+    if (gdDiff !== 0) return gdDiff;
+    if (b.gf !== a.gf) return b.gf - a.gf;
+    return a.team.name.localeCompare(b.team.name);
+  });
+}
+
+// GET /api/matches/groups/:group/standings — current auto-calculated standings
+router.get('/groups/:group/standings', async (req, res) => {
+  const group = req.params.group.toUpperCase();
+  try {
+    const standings = await calculateGroupStandings(group);
+    res.json(standings.map((s, i) => ({
+      position: i + 1,
+      teamId: s.team.id,
+      teamName: s.team.name,
+      teamFlag: s.team.flag,
+      mp: s.mp, w: s.w, d: s.d, l: s.l,
+      gf: s.gf, ga: s.ga, gd: s.gf - s.ga, pts: s.pts,
+    })));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
+// POST /api/matches/groups/:group/standings — auto-calculates standings and awards points
 router.post('/groups/:group/standings', auth, admin, async (req, res) => {
   const group = req.params.group.toUpperCase();
-  const { pos1, pos2, pos3, pos4 } = req.body;
-  if (!pos1 || !pos2 || !pos3 || !pos4)
-    return res.status(400).json({ error: 'Las 4 posiciones finales son requeridas' });
-
   try {
+    const standings = await calculateGroupStandings(group);
+    if (standings.length < 4)
+      return res.status(400).json({ error: 'No hay suficientes equipos en el grupo' });
+
+    const finishedCount = standings.reduce((sum, s) => sum + s.mp, 0) / 2;
+    const totalMatches = 6; // 4 teams × 3 matchdays / 2
+    if (finishedCount < totalMatches)
+      return res.status(400).json({
+        error: `El grupo aún no terminó (${finishedCount}/${totalMatches} partidos jugados)`,
+        finishedCount,
+        totalMatches,
+      });
+
+    const [pos1, pos2, pos3, pos4] = standings.map(s => s.team.name);
+
     const preds = await prisma.groupPrediction.findMany({ where: { group } });
     for (const pred of preds) {
       const points = (pred.pos1 === pos1 ? 2 : 0) + (pred.pos2 === pos2 ? 2 : 0)
                    + (pred.pos3 === pos3 ? 2 : 0) + (pred.pos4 === pos4 ? 2 : 0);
       await prisma.groupPrediction.update({ where: { id: pred.id }, data: { points } });
     }
-    res.json({ group, pos1, pos2, pos3, pos4, updated: preds.length });
+
+    res.json({
+      group, pos1, pos2, pos3, pos4,
+      standings: standings.map((s, i) => ({
+        position: i + 1, teamName: s.team.name, teamFlag: s.team.flag,
+        mp: s.mp, w: s.w, d: s.d, l: s.l,
+        gf: s.gf, ga: s.ga, gd: s.gf - s.ga, pts: s.pts,
+      })),
+      updated: preds.length,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error del servidor' });
