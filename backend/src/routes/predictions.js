@@ -209,23 +209,16 @@ router.get('/champion', auth, async (req, res) => {
 
 // POST /api/predictions/champion
 router.post('/champion', auth, async (req, res) => {
-  const {
-    champion, runnerUp, third,
-    topScorer1, topScorer2, topScorer3,
-    bestPlayer1, bestPlayer2, bestPlayer3,
-  } = req.body;
+  const { champion, runnerUp, third, topScorer, bestPlayer, bestGoalkeeper } = req.body;
 
   try {
     const data = {
-      champion: champion || '',
-      runnerUp: runnerUp || '',
-      third: third || '',
-      topScorer1: topScorer1 || '',
-      topScorer2: topScorer2 || '',
-      topScorer3: topScorer3 || '',
-      bestPlayer1: bestPlayer1 || '',
-      bestPlayer2: bestPlayer2 || '',
-      bestPlayer3: bestPlayer3 || '',
+      champion:       champion       || '',
+      runnerUp:       runnerUp       || '',
+      third:          third          || '',
+      topScorer:      topScorer      || '',
+      bestPlayer:     bestPlayer     || '',
+      bestGoalkeeper: bestGoalkeeper || '',
     };
 
     const pred = await prisma.championPrediction.upsert({

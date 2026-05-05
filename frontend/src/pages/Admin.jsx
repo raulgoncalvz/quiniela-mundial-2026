@@ -31,6 +31,8 @@ export default function Admin() {
   const [scoringConfigs, setScoringConfigs] = useState([]);
   const [savingScoring, setSavingScoring] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
+  const [champForm, setChampForm] = useState({ champion:'', runnerUp:'', third:'', topScorer:'', bestPlayer:'', bestGoalkeeper:'' });
+  const [calculatingChamp, setCalculatingChamp] = useState(false);
 
   const loadGroupStandings = async (group) => {
     setLoadingStandings(true);
@@ -93,6 +95,18 @@ export default function Admin() {
       toast.error(err.response?.data?.error || 'Error al recalcular');
     } finally {
       setRecalculating(false);
+    }
+  };
+
+  const handleCalculateChamp = async () => {
+    setCalculatingChamp(true);
+    try {
+      const { data } = await api.post('/config/champion/calculate', champForm);
+      toast.success(`✅ Puntos especiales asignados a ${data.updated} usuarios`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al calcular');
+    } finally {
+      setCalculatingChamp(false);
     }
   };
 
@@ -277,10 +291,11 @@ export default function Admin() {
       {/* ── Scoring Config ── */}
       {phase === 'scoring' && (
         <div className="space-y-4">
-          <div className="card">
-            <h3 className="font-bold text-wc-dark mb-1">⚙️ Sistema de Puntuación</h3>
-            <p className="text-xs text-gray-400 mb-4">Define los puntos por marcador exacto y resultado correcto en cada fase</p>
 
+          {/* Puntos por fase de partidos */}
+          <div className="card">
+            <h3 className="font-bold text-wc-dark mb-1">⚙️ Puntos por Partido</h3>
+            <p className="text-xs text-gray-400 mb-3">Marcador exacto y resultado correcto por fase</p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -291,25 +306,17 @@ export default function Admin() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {scoringConfigs.map(cfg => (
+                  {scoringConfigs.filter(c => !c.phase.startsWith('bet_')).map(cfg => (
                     <tr key={cfg.phase}>
                       <td className="py-2 font-medium text-wc-dark">{cfg.label || cfg.phase}</td>
                       <td className="py-2 text-center">
-                        <input
-                          type="number"
-                          min="1"
-                          max="20"
-                          value={cfg.exactScore}
+                        <input type="number" min="1" max="30" value={cfg.exactScore}
                           onChange={e => handleScoringChange(cfg.phase, 'exactScore', parseInt(e.target.value) || 0)}
                           className="w-14 text-center text-sm rounded-xl border border-gray-200 py-1 px-2 focus:ring-2 focus:ring-wc-red outline-none bg-wc-light-bg font-bold text-wc-red"
                         />
                       </td>
                       <td className="py-2 text-center">
-                        <input
-                          type="number"
-                          min="0"
-                          max="20"
-                          value={cfg.correctResult}
+                        <input type="number" min="0" max="30" value={cfg.correctResult}
                           onChange={e => handleScoringChange(cfg.phase, 'correctResult', parseInt(e.target.value) || 0)}
                           className="w-14 text-center text-sm rounded-xl border border-gray-200 py-1 px-2 focus:ring-2 focus:ring-wc-blue outline-none bg-wc-light-bg font-bold text-wc-blue"
                         />
@@ -319,23 +326,90 @@ export default function Admin() {
                 </tbody>
               </table>
             </div>
-
             <button onClick={handleSaveScoring} disabled={savingScoring}
               className="btn-primary w-full mt-4 flex items-center justify-center gap-2">
               {savingScoring ? <Spinner size="sm" color="white" /> : '💾 Guardar Configuración'}
             </button>
           </div>
 
-          <div className="card border border-amber-200 bg-amber-50">
-            <h3 className="font-bold text-amber-800 mb-1">🔄 Recalcular Puntos</h3>
-            <p className="text-xs text-amber-700 mb-3">
-              Aplica la configuración actual a todos los partidos ya finalizados. Útil si cambiaste los puntos después de guardar resultados.
-            </p>
-            <button onClick={handleRecalculate} disabled={recalculating}
-              className="w-full py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm transition-all flex items-center justify-center gap-2">
-              {recalculating ? <Spinner size="sm" color="white" /> : '⚡ Recalcular Todos los Puntos'}
+          {/* Puntos por apuestas especiales */}
+          <div className="card">
+            <h3 className="font-bold text-wc-dark mb-1">🏆 Puntos por Apuestas Especiales</h3>
+            <p className="text-xs text-gray-400 mb-3">Puntos al acertar cada apuesta especial</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-gray-500 border-b border-gray-100">
+                    <th className="text-left py-2 font-semibold">Apuesta</th>
+                    <th className="text-center py-2 font-semibold">🎯 Puntos</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {scoringConfigs.filter(c => c.phase.startsWith('bet_')).map(cfg => (
+                    <tr key={cfg.phase}>
+                      <td className="py-2 font-medium text-wc-dark">{cfg.label || cfg.phase}</td>
+                      <td className="py-2 text-center">
+                        <input type="number" min="1" max="50" value={cfg.exactScore}
+                          onChange={e => handleScoringChange(cfg.phase, 'exactScore', parseInt(e.target.value) || 0)}
+                          className="w-14 text-center text-sm rounded-xl border border-gray-200 py-1 px-2 focus:ring-2 focus:ring-wc-red outline-none bg-wc-light-bg font-bold text-wc-red"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <button onClick={handleSaveScoring} disabled={savingScoring}
+              className="btn-primary w-full mt-4 flex items-center justify-center gap-2">
+              {savingScoring ? <Spinner size="sm" color="white" /> : '💾 Guardar Configuración'}
             </button>
           </div>
+
+          {/* Asignar ganadores reales de apuestas especiales */}
+          <div className="card border border-wc-gold bg-amber-50">
+            <h3 className="font-bold text-amber-900 mb-1">🏅 Asignar Ganadores Reales</h3>
+            <p className="text-xs text-amber-700 mb-3">
+              Ingresa los ganadores reales y calcula los puntos de todos los usuarios
+            </p>
+            <div className="space-y-2">
+              {[
+                { key: 'champion',       label: '🏆 Campeón',       placeholder: 'País campeón' },
+                { key: 'runnerUp',       label: '🥈 Finalista',      placeholder: 'País finalista' },
+                { key: 'third',          label: '🥉 3er Lugar',       placeholder: 'País 3er lugar' },
+                { key: 'topScorer',      label: '⚽ Bota de Oro',     placeholder: 'Nombre del goleador' },
+                { key: 'bestPlayer',     label: '🌟 Balón de Oro',    placeholder: 'Nombre del mejor jugador' },
+                { key: 'bestGoalkeeper', label: '🧤 Mejor Portero',   placeholder: 'Nombre del mejor portero' },
+              ].map(({ key, label, placeholder }) => (
+                <div key={key}>
+                  <label className="text-xs font-bold text-amber-800 block mb-1">{label}</label>
+                  <input
+                    type="text"
+                    placeholder={placeholder}
+                    value={champForm[key]}
+                    onChange={e => setChampForm(prev => ({ ...prev, [key]: e.target.value }))}
+                    className="w-full text-sm rounded-xl border border-amber-200 py-2 px-3 focus:ring-2 focus:ring-amber-400 outline-none bg-white"
+                  />
+                </div>
+              ))}
+            </div>
+            <button onClick={handleCalculateChamp} disabled={calculatingChamp}
+              className="w-full mt-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm transition-all flex items-center justify-center gap-2">
+              {calculatingChamp ? <Spinner size="sm" color="white" /> : '⚡ Calcular Puntos Especiales'}
+            </button>
+          </div>
+
+          {/* Recalcular partidos */}
+          <div className="card border border-gray-200">
+            <h3 className="font-bold text-gray-700 mb-1">🔄 Recalcular Puntos de Partidos</h3>
+            <p className="text-xs text-gray-500 mb-3">
+              Aplica la configuración a todos los partidos ya finalizados
+            </p>
+            <button onClick={handleRecalculate} disabled={recalculating}
+              className="w-full py-2 rounded-xl bg-gray-600 hover:bg-gray-700 text-white font-bold text-sm transition-all flex items-center justify-center gap-2">
+              {recalculating ? <Spinner size="sm" color="white" /> : '⚡ Recalcular Partidos'}
+            </button>
+          </div>
+
         </div>
       )}
 

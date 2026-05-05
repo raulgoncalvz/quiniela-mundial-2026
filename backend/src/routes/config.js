@@ -6,13 +6,19 @@ const admin = require('../middleware/admin');
 const prisma = new PrismaClient();
 
 const DEFAULT_CONFIGS = [
-  { phase: 'groups',    label: 'Fase de Grupos',  exactScore: 3,  correctResult: 1 },
-  { phase: 'round32',   label: 'Ronda de 32',      exactScore: 4,  correctResult: 2 },
-  { phase: 'round16',   label: 'Octavos de Final', exactScore: 5,  correctResult: 2 },
-  { phase: 'quarters',  label: 'Cuartos de Final', exactScore: 6,  correctResult: 3 },
-  { phase: 'semis',     label: 'Semifinales',       exactScore: 7,  correctResult: 3 },
-  { phase: 'third',     label: 'Tercer Lugar',      exactScore: 6,  correctResult: 3 },
-  { phase: 'final',     label: 'Final',             exactScore: 10, correctResult: 5 },
+  { phase: 'groups',         label: 'Fase de Grupos',    exactScore: 3,  correctResult: 1 },
+  { phase: 'round32',        label: 'Ronda de 32',        exactScore: 4,  correctResult: 2 },
+  { phase: 'round16',        label: 'Octavos de Final',   exactScore: 5,  correctResult: 2 },
+  { phase: 'quarters',       label: 'Cuartos de Final',   exactScore: 6,  correctResult: 3 },
+  { phase: 'semis',          label: 'Semifinales',         exactScore: 7,  correctResult: 3 },
+  { phase: 'third',          label: 'Tercer Lugar',        exactScore: 6,  correctResult: 3 },
+  { phase: 'final',          label: 'Final',               exactScore: 10, correctResult: 5 },
+  { phase: 'bet_champion',   label: '🏆 Campeón',          exactScore: 15, correctResult: 0 },
+  { phase: 'bet_runnerUp',   label: '🥈 Finalista',        exactScore: 10, correctResult: 0 },
+  { phase: 'bet_third',      label: '🥉 3er Lugar Apuesta', exactScore: 5,  correctResult: 0 },
+  { phase: 'bet_topScorer',  label: '⚽ Bota de Oro',      exactScore: 5,  correctResult: 0 },
+  { phase: 'bet_bestPlayer', label: '🌟 Balón de Oro',     exactScore: 5,  correctResult: 0 },
+  { phase: 'bet_goalkeeper', label: '🧤 Mejor Portero',    exactScore: 5,  correctResult: 0 },
 ];
 
 // GET /api/config/scoring
@@ -101,6 +107,44 @@ router.post('/scoring/recalculate', auth, admin, async (req, res) => {
     }
 
     res.json({ success: true, predictionsRecalculated: totalUpdated });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
+// POST /api/config/champion/calculate — assign points for special bets
+router.post('/champion/calculate', auth, admin, async (req, res) => {
+  const { champion, runnerUp, third, topScorer, bestPlayer, bestGoalkeeper } = req.body;
+
+  try {
+    // Load scoring config for special bets
+    const cfgList = await prisma.scoringConfig.findMany({
+      where: { phase: { in: ['bet_champion','bet_runnerUp','bet_third','bet_topScorer','bet_bestPlayer','bet_goalkeeper'] } },
+    });
+    const cfg = {};
+    for (const c of cfgList) cfg[c.phase] = c.exactScore;
+
+    const users = await prisma.championPrediction.findMany();
+    let updated = 0;
+
+    for (const pred of users) {
+      const points =
+        (champion       && pred.champion       === champion       ? (cfg.bet_champion   || 15) : 0) +
+        (runnerUp       && pred.runnerUp        === runnerUp       ? (cfg.bet_runnerUp   || 10) : 0) +
+        (third          && pred.third           === third          ? (cfg.bet_third      ||  5) : 0) +
+        (topScorer      && pred.topScorer       === topScorer      ? (cfg.bet_topScorer  ||  5) : 0) +
+        (bestPlayer     && pred.bestPlayer      === bestPlayer     ? (cfg.bet_bestPlayer ||  5) : 0) +
+        (bestGoalkeeper && pred.bestGoalkeeper  === bestGoalkeeper ? (cfg.bet_goalkeeper ||  5) : 0);
+
+      await prisma.championPrediction.update({
+        where: { id: pred.id },
+        data: { points },
+      });
+      updated++;
+    }
+
+    res.json({ success: true, updated });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error del servidor' });

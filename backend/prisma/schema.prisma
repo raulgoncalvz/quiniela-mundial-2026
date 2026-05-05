@@ -84,17 +84,14 @@ model ScoringConfig {
 }
 
 model ChampionPrediction {
-  id          Int    @id @default(autoincrement())
-  userId      Int    @unique
-  champion    String @default("")
-  runnerUp    String @default("")
-  third       String @default("")
-  topScorer1  String @default("")
-  topScorer2  String @default("")
-  topScorer3  String @default("")
-  bestPlayer1 String @default("")
-  bestPlayer2 String @default("")
-  bestPlayer3 String @default("")
-  points      Int    @default(0)
-  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             Int    @id @default(autoincrement())
+  userId         Int    @unique
+  champion       String @default("")
+  runnerUp       String @default("")
+  third          String @default("")
+  topScorer      String @default("")
+  bestPlayer     String @default("")
+  bestGoalkeeper String @default("")
+  points         Int    @default(0)
+  user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

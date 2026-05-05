@@ -32,7 +32,7 @@ export default function Quiniela() {
   const [matches, setMatches] = useState([]);
   const [predictions, setPredictions] = useState({}); // { matchId: prediction }
   const [champion, setChampion] = useState(null);
-  const [champForm, setChampForm] = useState({ champion:'', runnerUp:'', third:'', topScorer1:'', topScorer2:'', topScorer3:'', bestPlayer1:'', bestPlayer2:'', bestPlayer3:'' });
+  const [champForm, setChampForm] = useState({ champion:'', runnerUp:'', third:'', topScorer:'', bestPlayer:'', bestGoalkeeper:'' });
   const [loading, setLoading] = useState(true);
   const [savingChamp, setSavingChamp] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -324,58 +324,47 @@ export default function Quiniela() {
           <div className="mt-8">
             <h2 className="section-title">🏆 Apuestas Especiales</h2>
             <form onSubmit={handleSaveChampion} className="card space-y-4">
-              <div className="grid grid-cols-3 gap-3">
+
+              {/* Podio */}
+              <div>
+                <p className="text-xs font-bold text-gray-600 mb-2">🏆 Podio Final</p>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { key: 'champion', label: '🥇 Campeón' },
+                    { key: 'runnerUp', label: '🥈 Finalista' },
+                    { key: 'third',    label: '🥉 3er Lugar' },
+                  ].map(({ key, label }) => (
+                    <div key={key}>
+                      <label className="text-xs font-bold text-gray-500 block mb-1">{label}</label>
+                      <select
+                        value={champForm[key]}
+                        onChange={e => setChampForm(f => ({ ...f, [key]: e.target.value }))}
+                        className="w-full text-xs rounded-xl border border-gray-200 py-2 px-2 focus:ring-2 focus:ring-wc-blue outline-none bg-wc-light-bg"
+                      >
+                        <option value="">—</option>
+                        {TEAMS_LIST.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Premios individuales */}
+              <div className="border-t pt-3 space-y-2">
                 {[
-                  { key: 'champion', label: '🥇 Campeón' },
-                  { key: 'runnerUp', label: '🥈 Finalista' },
-                  { key: 'third',    label: '🥉 3er Lugar' },
-                ].map(({ key, label }) => (
+                  { key: 'topScorer',      label: '⚽ Bota de Oro',   placeholder: 'Nombre del goleador' },
+                  { key: 'bestPlayer',     label: '🌟 Balón de Oro',  placeholder: 'Nombre del mejor jugador' },
+                  { key: 'bestGoalkeeper', label: '🧤 Mejor Portero', placeholder: 'Nombre del mejor portero' },
+                ].map(({ key, label, placeholder }) => (
                   <div key={key}>
                     <label className="text-xs font-bold text-gray-600 block mb-1">{label}</label>
-                    <select
+                    <input type="text" placeholder={placeholder}
                       value={champForm[key]}
                       onChange={e => setChampForm(f => ({ ...f, [key]: e.target.value }))}
-                      className="w-full text-xs rounded-xl border border-gray-200 py-2 px-2 focus:ring-2 focus:ring-wc-blue focus:border-transparent outline-none bg-wc-light-bg"
-                    >
-                      <option value="">Seleccionar</option>
-                      {TEAMS_LIST.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                      className="input-field text-sm py-2"
+                    />
                   </div>
                 ))}
-              </div>
-
-              <div className="border-t pt-4">
-                <p className="text-xs font-bold text-gray-600 mb-3">⚽ Bota de Oro (Goleadores)</p>
-                <div className="space-y-2">
-                  {[
-                    { key: 'topScorer1', label: '1er Goleador' },
-                    { key: 'topScorer2', label: '2do Goleador' },
-                    { key: 'topScorer3', label: '3er Goleador' },
-                  ].map(({ key, label }) => (
-                    <input key={key} type="text" placeholder={label}
-                      value={champForm[key]}
-                      onChange={e => setChampForm(f => ({ ...f, [key]: e.target.value }))}
-                      className="input-field text-sm py-2"
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div className="border-t pt-4">
-                <p className="text-xs font-bold text-gray-600 mb-3">🌟 Balón de Oro (Mejores Jugadores)</p>
-                <div className="space-y-2">
-                  {[
-                    { key: 'bestPlayer1', label: 'Mejor Jugador' },
-                    { key: 'bestPlayer2', label: '2do Mejor Jugador' },
-                    { key: 'bestPlayer3', label: '3er Mejor Jugador' },
-                  ].map(({ key, label }) => (
-                    <input key={key} type="text" placeholder={label}
-                      value={champForm[key]}
-                      onChange={e => setChampForm(f => ({ ...f, [key]: e.target.value }))}
-                      className="input-field text-sm py-2"
-                    />
-                  ))}
-                </div>
               </div>
 
               <button type="submit" disabled={savingChamp} className="btn-gold w-full flex items-center justify-center gap-2">
