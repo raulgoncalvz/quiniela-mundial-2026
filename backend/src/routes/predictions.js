@@ -105,6 +105,72 @@ router.get('/groups', auth, async (req, res) => {
   }
 });
 
+// GET /api/predictions/groups/:group/standings — standings calculated from user's own match predictions
+router.get('/groups/:group/standings', auth, async (req, res) => {
+  const group = req.params.group.toUpperCase();
+  try {
+    const teams = await prisma.team.findMany({ where: { group } });
+    const groupMatches = await prisma.match.findMany({ where: { group, phase: 'groups' } });
+    const matchIds = groupMatches.map(m => m.id);
+
+    const userPreds = await prisma.prediction.findMany({
+      where: { userId: req.user.id, matchId: { in: matchIds } },
+    });
+    const predMap = {};
+    for (const p of userPreds) predMap[p.matchId] = p;
+
+    const stats = {};
+    for (const team of teams) {
+      stats[team.id] = { team, mp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
+    }
+
+    for (const match of groupMatches) {
+      const pred = predMap[match.id];
+      if (!pred) continue;
+      const home = stats[match.homeTeamId];
+      const away = stats[match.awayTeamId];
+      if (!home || !away) continue;
+
+      home.mp++; away.mp++;
+      home.gf += pred.homeScore; home.ga += pred.awayScore;
+      away.gf += pred.awayScore; away.ga += pred.homeScore;
+
+      if (pred.homeScore > pred.awayScore) {
+        home.w++; home.pts += 3; away.l++;
+      } else if (pred.homeScore < pred.awayScore) {
+        away.w++; away.pts += 3; home.l++;
+      } else {
+        home.d++; home.pts++;
+        away.d++; away.pts++;
+      }
+    }
+
+    const sorted = Object.values(stats).sort((a, b) => {
+      if (b.pts !== a.pts) return b.pts - a.pts;
+      const gdDiff = (b.gf - b.ga) - (a.gf - a.ga);
+      if (gdDiff !== 0) return gdDiff;
+      if (b.gf !== a.gf) return b.gf - a.gf;
+      return a.team.name.localeCompare(b.team.name);
+    });
+
+    res.json({
+      standings: sorted.map((s, i) => ({
+        position: i + 1,
+        teamId: s.team.id,
+        teamName: s.team.name,
+        teamFlag: s.team.flag,
+        mp: s.mp, w: s.w, d: s.d, l: s.l,
+        gf: s.gf, ga: s.ga, gd: s.gf - s.ga, pts: s.pts,
+      })),
+      predictedMatches: Object.keys(predMap).length,
+      totalMatches: groupMatches.length,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
 // POST /api/predictions/groups/:group
 router.post('/groups/:group', auth, async (req, res) => {
   const group = req.params.group.toUpperCase();

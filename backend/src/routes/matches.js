@@ -223,40 +223,95 @@ router.get('/groups/:group/standings', async (req, res) => {
   }
 });
 
+// Helper: calculate a user's predicted standings from their match predictions
+async function calculatePredictedStandings(group, userId) {
+  const teams = await prisma.team.findMany({ where: { group } });
+  const matches = await prisma.match.findMany({ where: { group, phase: 'groups' } });
+  const matchIds = matches.map(m => m.id);
+
+  const preds = await prisma.prediction.findMany({ where: { userId, matchId: { in: matchIds } } });
+  const predMap = {};
+  for (const p of preds) predMap[p.matchId] = p;
+
+  const stats = {};
+  for (const team of teams) {
+    stats[team.id] = { team, mp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
+  }
+
+  for (const match of matches) {
+    const pred = predMap[match.id];
+    if (!pred) continue;
+    const home = stats[match.homeTeamId];
+    const away = stats[match.awayTeamId];
+    if (!home || !away) continue;
+
+    home.mp++; away.mp++;
+    home.gf += pred.homeScore; home.ga += pred.awayScore;
+    away.gf += pred.awayScore; away.ga += pred.homeScore;
+
+    if (pred.homeScore > pred.awayScore) {
+      home.w++; home.pts += 3; away.l++;
+    } else if (pred.homeScore < pred.awayScore) {
+      away.w++; away.pts += 3; home.l++;
+    } else {
+      home.d++; home.pts++;
+      away.d++; away.pts++;
+    }
+  }
+
+  return Object.values(stats).sort((a, b) => {
+    if (b.pts !== a.pts) return b.pts - a.pts;
+    const gdDiff = (b.gf - b.ga) - (a.gf - a.ga);
+    if (gdDiff !== 0) return gdDiff;
+    if (b.gf !== a.gf) return b.gf - a.gf;
+    return a.team.name.localeCompare(b.team.name);
+  });
+}
+
 // POST /api/matches/groups/:group/standings — auto-calculates standings and awards points
 router.post('/groups/:group/standings', auth, admin, async (req, res) => {
   const group = req.params.group.toUpperCase();
   try {
-    const standings = await calculateGroupStandings(group);
-    if (standings.length < 4)
+    const realStandings = await calculateGroupStandings(group);
+    if (realStandings.length < 4)
       return res.status(400).json({ error: 'No hay suficientes equipos en el grupo' });
 
-    const finishedCount = standings.reduce((sum, s) => sum + s.mp, 0) / 2;
-    const totalMatches = 6; // 4 teams × 3 matchdays / 2
-    if (finishedCount < totalMatches)
+    const finishedCount = realStandings.reduce((sum, s) => sum + s.mp, 0) / 2;
+    if (finishedCount < 6)
       return res.status(400).json({
-        error: `El grupo aún no terminó (${finishedCount}/${totalMatches} partidos jugados)`,
-        finishedCount,
-        totalMatches,
+        error: `El grupo aún no terminó (${finishedCount}/6 partidos jugados)`,
+        finishedCount, totalMatches: 6,
       });
 
-    const [pos1, pos2, pos3, pos4] = standings.map(s => s.team.name);
+    const [rPos1, rPos2, rPos3, rPos4] = realStandings.map(s => s.team.name);
 
-    const preds = await prisma.groupPrediction.findMany({ where: { group } });
-    for (const pred of preds) {
-      const points = (pred.pos1 === pos1 ? 2 : 0) + (pred.pos2 === pos2 ? 2 : 0)
-                   + (pred.pos3 === pos3 ? 2 : 0) + (pred.pos4 === pos4 ? 2 : 0);
-      await prisma.groupPrediction.update({ where: { id: pred.id }, data: { points } });
+    // For each user, calculate their predicted standings from match predictions
+    const users = await prisma.user.findMany({ where: { role: 'user' } });
+    let updated = 0;
+
+    for (const user of users) {
+      const predStandings = await calculatePredictedStandings(group, user.id);
+      const [pPos1, pPos2, pPos3, pPos4] = predStandings.map(s => s.team.name);
+
+      const points = (pPos1 === rPos1 ? 2 : 0) + (pPos2 === rPos2 ? 2 : 0)
+                   + (pPos3 === rPos3 ? 2 : 0) + (pPos4 === rPos4 ? 2 : 0);
+
+      await prisma.groupPrediction.upsert({
+        where: { userId_group: { userId: user.id, group } },
+        update: { pos1: pPos1 || '', pos2: pPos2 || '', pos3: pPos3 || '', pos4: pPos4 || '', points },
+        create: { userId: user.id, group, pos1: pPos1 || '', pos2: pPos2 || '', pos3: pPos3 || '', pos4: pPos4 || '', points },
+      });
+      updated++;
     }
 
     res.json({
-      group, pos1, pos2, pos3, pos4,
-      standings: standings.map((s, i) => ({
+      group, pos1: rPos1, pos2: rPos2, pos3: rPos3, pos4: rPos4,
+      standings: realStandings.map((s, i) => ({
         position: i + 1, teamName: s.team.name, teamFlag: s.team.flag,
         mp: s.mp, w: s.w, d: s.d, l: s.l,
         gf: s.gf, ga: s.ga, gd: s.gf - s.ga, pts: s.pts,
       })),
-      updated: preds.length,
+      updated,
     });
   } catch (err) {
     console.error(err);

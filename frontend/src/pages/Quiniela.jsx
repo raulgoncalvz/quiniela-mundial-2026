@@ -15,21 +15,6 @@ const PHASES = [
   { key: 'final',     label: 'Final',      icon: '🏆' },
 ];
 
-const GROUP_TEAMS = {
-  A: ['México', 'Sudáfrica', 'Corea del Sur', 'Rep. Checa'],
-  B: ['Canadá', 'Bosnia-Herz.', 'Catar', 'Suiza'],
-  C: ['Brasil', 'Marruecos', 'Haití', 'Escocia'],
-  D: ['Estados Unidos', 'Paraguay', 'Australia', 'Turquía'],
-  E: ['Alemania', 'Curazao', 'Costa de Marfil', 'Ecuador'],
-  F: ['Países Bajos', 'Japón', 'Suecia', 'Túnez'],
-  G: ['Bélgica', 'Egipto', 'Irán', 'Nueva Zelanda'],
-  H: ['España', 'Cabo Verde', 'Arabia Saudita', 'Uruguay'],
-  I: ['Francia', 'Senegal', 'Irak', 'Noruega'],
-  J: ['Argentina', 'Argelia', 'Austria', 'Jordania'],
-  K: ['Portugal', 'RD Congo', 'Uzbekistán', 'Colombia'],
-  L: ['Inglaterra', 'Croacia', 'Ghana', 'Panamá'],
-};
-
 const GROUP_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L'];
 
 const TEAMS_LIST = [
@@ -51,59 +36,24 @@ export default function Quiniela() {
   const [loading, setLoading] = useState(true);
   const [savingChamp, setSavingChamp] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [groupPreds, setGroupPreds] = useState({});
-  const [groupForms, setGroupForms] = useState({});
-  const [groupLocked, setGroupLocked] = useState({});
-  const [savingGroup, setSavingGroup] = useState(false);
+  const [posStandings, setPosStandings] = useState({});
+  const [posLoading, setPosLoading] = useState(false);
 
   useEffect(() => {
     if (activePhase !== 'positions') return;
     const load = async () => {
-      setLoading(true);
+      setPosLoading(true);
       try {
-        const [predsRes, matchesRes] = await Promise.all([
-          api.get('/predictions/groups'),
-          api.get('/matches?phase=groups'),
-        ]);
-        const predMap = {};
-        for (const p of predsRes.data) predMap[p.group] = p;
-        setGroupPreds(predMap);
-        const forms = {};
-        for (const g of GROUP_LETTERS) {
-          forms[g] = predMap[g]
-            ? { pos1: predMap[g].pos1, pos2: predMap[g].pos2, pos3: predMap[g].pos3, pos4: predMap[g].pos4 }
-            : { pos1: '', pos2: '', pos3: '', pos4: '' };
-        }
-        setGroupForms(forms);
-        const locked = {};
-        for (const m of matchesRes.data) {
-          if (m.status !== 'pending') locked[m.group] = true;
-        }
-        setGroupLocked(locked);
+        const { data } = await api.get(`/predictions/groups/${activeGroup}/standings`);
+        setPosStandings(prev => ({ ...prev, [activeGroup]: data }));
       } catch {
         toast.error('Error al cargar posiciones');
       } finally {
-        setLoading(false);
+        setPosLoading(false);
       }
     };
     load();
-  }, [activePhase]);
-
-  const handleSaveGroupPred = async () => {
-    const form = groupForms[activeGroup] || {};
-    if (!form.pos1 || !form.pos2 || !form.pos3 || !form.pos4)
-      return toast.error('Completa las 4 posiciones del grupo');
-    setSavingGroup(true);
-    try {
-      const { data } = await api.post(`/predictions/groups/${activeGroup}`, form);
-      setGroupPreds(prev => ({ ...prev, [activeGroup]: data }));
-      toast.success(`¡Grupo ${activeGroup} guardado! 📊`);
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Error al guardar');
-    } finally {
-      setSavingGroup(false);
-    }
-  };
+  }, [activeGroup, activePhase]);
 
   const loadData = useCallback(async () => {
     if (activePhase === 'positions') return;
@@ -219,9 +169,14 @@ export default function Quiniela() {
           {/* Dot indicators for positions tab */}
           {activePhase === 'positions' && (
             <div className="flex gap-1.5 mb-1">
-              {GROUP_LETTERS.map(g => (
-                <div key={g} className={`w-2 h-2 rounded-full ${groupPreds[g]?.pos1 ? 'bg-green-500' : 'bg-gray-300'}`} />
-              ))}
+              {GROUP_LETTERS.map(g => {
+                const s = posStandings[g];
+                const done = s?.predictedMatches === s?.totalMatches && s?.totalMatches > 0;
+                const partial = s?.predictedMatches > 0 && !done;
+                return (
+                  <div key={g} className={`w-2 h-2 rounded-full ${done ? 'bg-green-500' : partial ? 'bg-yellow-400' : 'bg-gray-300'}`} />
+                );
+              })}
             </div>
           )}
 
@@ -243,93 +198,99 @@ export default function Quiniela() {
         </>
       )}
 
-      {/* ── Posiciones de grupo ───────────────────────────────────── */}
-      {activePhase === 'positions' && !loading && (
+      {/* ── Posiciones de grupo (auto-calculadas desde pronósticos) ── */}
+      {activePhase === 'positions' && (
         <div className="space-y-3">
           <div className="card">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3">
               <div>
-                <h3 className="font-bold text-wc-dark">Grupo {activeGroup} — Posición Final</h3>
-                <p className="text-xs text-gray-400 mt-0.5">2 pts por cada posición exacta · máx 8 pts</p>
+                <h3 className="font-bold text-wc-dark">Grupo {activeGroup}</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Tabla calculada desde tus pronósticos · 2 pts por posición exacta</p>
               </div>
-              {groupLocked[activeGroup]
-                ? <span className="text-xs bg-red-100 text-red-600 font-bold px-2 py-1 rounded-lg">🔒 Cerrado</span>
-                : <span className="text-xs bg-green-100 text-green-600 font-bold px-2 py-1 rounded-lg">✏️ Abierto</span>
-              }
+              {posStandings[activeGroup] && (
+                <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
+                  posStandings[activeGroup].predictedMatches === posStandings[activeGroup].totalMatches
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-yellow-100 text-yellow-700'
+                }`}>
+                  {posStandings[activeGroup].predictedMatches}/{posStandings[activeGroup].totalMatches} partidos
+                </span>
+              )}
             </div>
 
-            <div className="space-y-3">
-              {[
-                { pos: 'pos1', label: '🥇 1er Lugar' },
-                { pos: 'pos2', label: '🥈 2do Lugar' },
-                { pos: 'pos3', label: '🥉 3er Lugar' },
-                { pos: 'pos4', label: '4️⃣  4to Lugar' },
-              ].map(({ pos, label }) => {
-                const form = groupForms[activeGroup] || {};
-                const selected = form[pos] || '';
-                const otherSelected = ['pos1','pos2','pos3','pos4']
-                  .filter(p => p !== pos).map(p => form[p]).filter(Boolean);
-                return (
-                  <div key={pos}>
-                    <label className="text-xs font-bold text-gray-600 block mb-1">{label}</label>
-                    <select
-                      value={selected}
-                      disabled={groupLocked[activeGroup]}
-                      onChange={e => setGroupForms(prev => ({
-                        ...prev,
-                        [activeGroup]: { ...prev[activeGroup], [pos]: e.target.value },
-                      }))}
-                      className="w-full text-sm rounded-xl border border-gray-200 py-2 px-3 focus:ring-2 focus:ring-wc-blue outline-none bg-wc-light-bg disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <option value="">Seleccionar equipo</option>
-                      {(GROUP_TEAMS[activeGroup] || []).map(t => (
-                        <option key={t} value={t} disabled={otherSelected.includes(t)}>{t}</option>
-                      ))}
-                    </select>
-                  </div>
-                );
-              })}
-            </div>
-
-            {!groupLocked[activeGroup] && (
-              <button
-                onClick={handleSaveGroupPred}
-                disabled={savingGroup}
-                className="btn-primary w-full mt-4 flex items-center justify-center gap-2"
-              >
-                {savingGroup ? <Spinner size="sm" color="white" /> : `💾 Guardar Grupo ${activeGroup}`}
-              </button>
+            {posLoading ? (
+              <div className="flex justify-center py-6"><Spinner size="md" /></div>
+            ) : !posStandings[activeGroup] || posStandings[activeGroup].standings.every(s => s.mp === 0) ? (
+              <div className="text-center py-6 text-gray-400">
+                <p className="text-3xl mb-2">⚽</p>
+                <p className="text-sm font-semibold">No has pronosticado ningún partido de este grupo</p>
+                <p className="text-xs mt-1">Ve al tab <strong>Grupos</strong> y completa tus marcadores</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-gray-400 border-b border-gray-100">
+                      <th className="text-left py-1.5 w-6">#</th>
+                      <th className="text-left py-1.5">Equipo</th>
+                      <th className="text-center py-1.5 w-7">PJ</th>
+                      <th className="text-center py-1.5 w-7">G</th>
+                      <th className="text-center py-1.5 w-7">E</th>
+                      <th className="text-center py-1.5 w-7">P</th>
+                      <th className="text-center py-1.5 w-8">GD</th>
+                      <th className="text-center py-1.5 w-8 font-bold text-wc-dark">Pts</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {posStandings[activeGroup].standings.map(s => (
+                      <tr key={s.teamId} className={s.position <= 2 ? 'bg-green-50' : ''}>
+                        <td className="py-2 font-bold text-gray-400">{s.position}</td>
+                        <td className="py-2">
+                          <span className="mr-1">{s.teamFlag}</span>
+                          <span className="font-semibold text-wc-dark">{s.teamName}</span>
+                          {s.position <= 2 && <span className="ml-1 text-green-500 text-xs">✓</span>}
+                        </td>
+                        <td className="py-2 text-center text-gray-500">{s.mp}</td>
+                        <td className="py-2 text-center text-gray-500">{s.w}</td>
+                        <td className="py-2 text-center text-gray-500">{s.d}</td>
+                        <td className="py-2 text-center text-gray-500">{s.l}</td>
+                        <td className="py-2 text-center text-gray-500">{s.gd > 0 ? `+${s.gd}` : s.gd}</td>
+                        <td className="py-2 text-center font-black text-wc-dark">{s.pts}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
 
-            {groupPreds[activeGroup]?.points > 0 && (
-              <p className="text-center text-xs text-green-600 mt-2 font-semibold">
-                ✓ {groupPreds[activeGroup].points} puntos ganados en este grupo
-              </p>
-            )}
-            {groupPreds[activeGroup]?.pos1 && groupPreds[activeGroup]?.points === 0 && (
-              <p className="text-center text-xs text-gray-400 mt-2">✓ Guardado — puntos al finalizar el grupo</p>
-            )}
+            <p className="text-xs text-gray-400 text-center mt-3">
+              Los puntos se asignan automáticamente al finalizar el grupo
+            </p>
           </div>
 
-          {/* Resumen de progreso */}
+          {/* Progreso de grupos */}
           <div className="card">
             <p className="text-xs font-bold text-gray-600 mb-2">
-              Progreso — {Object.values(groupPreds).filter(p => p?.pos1).length}/12 grupos completados
+              Grupos con pronósticos completos — {
+                Object.values(posStandings).filter(s => s?.predictedMatches === s?.totalMatches && s?.totalMatches > 0).length
+              }/12
             </p>
             <div className="flex flex-wrap gap-1.5">
-              {GROUP_LETTERS.map(g => (
-                <button
-                  key={g}
-                  onClick={() => setActiveGroup(g)}
-                  className={`w-9 h-9 rounded-xl text-xs font-black transition-all ${
-                    groupPreds[g]?.pos1
-                      ? 'bg-green-100 text-green-700 border border-green-300'
+              {GROUP_LETTERS.map(g => {
+                const s = posStandings[g];
+                const full = s?.predictedMatches === s?.totalMatches && s?.totalMatches > 0;
+                const partial = s?.predictedMatches > 0 && !full;
+                return (
+                  <button key={g} onClick={() => setActiveGroup(g)}
+                    className={`w-9 h-9 rounded-xl text-xs font-black transition-all ${
+                      full ? 'bg-green-100 text-green-700 border border-green-300'
+                      : partial ? 'bg-yellow-100 text-yellow-700 border border-yellow-300'
                       : 'bg-gray-100 text-gray-400'
-                  } ${activeGroup === g ? 'ring-2 ring-wc-blue' : ''}`}
-                >
-                  {g}
-                </button>
-              ))}
+                    } ${activeGroup === g ? 'ring-2 ring-wc-blue' : ''}`}>
+                    {g}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -429,10 +390,6 @@ export default function Quiniela() {
         </>
       )}
 
-      {/* Spinner mientras carga posiciones */}
-      {activePhase === 'positions' && loading && (
-        <div className="flex justify-center py-12"><Spinner size="lg" /></div>
-      )}
     </div>
   );
 }
