@@ -30,19 +30,25 @@ export default function Home() {
   const [stats, setStats] = useState(null);
   const [myRank, setMyRank] = useState(null);
 
+  const [predMap, setPredMap] = useState({});
+
   useEffect(() => {
     Promise.all([
       api.get('/matches/upcoming?limit=3'),
       api.get('/matches/recent?limit=3'),
       api.get('/ranking'),
       api.get('/predictions/stats'),
-    ]).then(([up, re, rk, st]) => {
+      api.get('/predictions'),
+    ]).then(([up, re, rk, st, preds]) => {
       setUpcoming(up.data);
       setRecent(re.data);
       setRanking(rk.data.slice(0, 3));
       setStats(st.data);
-      const me = rk.data.find(u => u.id === user.id);
+      const me = rk.data.find(u => Number(u.id) === Number(user.id));
       setMyRank(me);
+      const map = {};
+      for (const p of preds.data) map[p.matchId] = p;
+      setPredMap(map);
     }).catch(console.error)
       .finally(() => setLoading(false));
   }, [user.id]);
@@ -87,11 +93,15 @@ export default function Home() {
             <div className="flex-1">
               <p className="text-xs opacity-70">Hola, {user.name}!</p>
               <p className="font-bold">
-                {myRank ? `#${myRank.position} en el ranking` : 'Sin puntos aún'}
+                {myRank
+                  ? `#${myRank.position} en el ranking`
+                  : stats?.totalPoints > 0
+                    ? 'Puntos acumulados'
+                    : 'Sin puntos aún'}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-2xl font-black">{stats?.totalPoints || 0}</p>
+              <p className="text-2xl font-black">{stats?.totalPoints ?? 0}</p>
               <p className="text-xs opacity-70">puntos</p>
             </div>
           </div>
@@ -157,7 +167,7 @@ export default function Home() {
           <h2 className="section-title">⚽ Últimos Resultados</h2>
           <div className="space-y-3">
             {recent.map(match => (
-              <MatchCard key={match.id} match={match} readOnly />
+              <MatchCard key={match.id} match={match} prediction={predMap[match.id]} readOnly />
             ))}
           </div>
         </section>

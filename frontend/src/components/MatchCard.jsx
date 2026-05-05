@@ -65,13 +65,19 @@ export default function MatchCard({ match, prediction, onSave, readOnly = false 
     setter(val);
   };
 
-  // Calculate points if match is finished and prediction exists
+  // Calculate points badge — compare scores directly so it works with any scoring config
   let pointsBadge = null;
   if (match.status === 'finished' && prediction) {
     const pts = prediction.points;
-    if (pts === 3) pointsBadge = { label: '+3 pts ⭐', class: 'bg-amber-100 text-amber-700' };
-    else if (pts === 1) pointsBadge = { label: '+1 pt ✓', class: 'bg-blue-100 text-wc-blue' };
-    else pointsBadge = { label: '0 pts ✗', class: 'bg-gray-100 text-gray-500' };
+    const isExact = match.homeScore !== null &&
+      prediction.homeScore === match.homeScore &&
+      prediction.awayScore === match.awayScore;
+    if (isExact)
+      pointsBadge = { label: `+${pts} pts ⭐`, class: 'bg-amber-100 text-amber-700' };
+    else if (pts > 0)
+      pointsBadge = { label: `+${pts} pt${pts !== 1 ? 's' : ''} ✓`, class: 'bg-blue-100 text-wc-blue' };
+    else
+      pointsBadge = { label: '0 pts ✗', class: 'bg-gray-100 text-gray-500' };
   }
 
   return (

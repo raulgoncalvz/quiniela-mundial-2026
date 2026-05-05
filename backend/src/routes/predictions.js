@@ -239,20 +239,28 @@ router.get('/stats', auth, async (req, res) => {
   try {
     const predictions = await prisma.prediction.findMany({
       where: { userId: req.user.id },
-      include: { match: true },
+      include: { match: { select: { homeScore: true, awayScore: true, status: true } } },
     });
 
     const total = predictions.length;
     const finished = predictions.filter(p => p.match.status === 'finished');
-    const exact = finished.filter(p => p.points === 3).length;
-    const correct = finished.filter(p => p.points >= 1).length;
-    const totalPoints = finished.reduce((sum, p) => sum + p.points, 0);
 
-    const championPred = await prisma.championPrediction.findUnique({
-      where: { userId: req.user.id },
-    });
+    // Exact = predicted scores match actual scores (works regardless of scoring config)
+    const exact = finished.filter(p =>
+      p.match.homeScore !== null &&
+      p.homeScore === p.match.homeScore &&
+      p.awayScore === p.match.awayScore
+    ).length;
+    const correct = finished.filter(p => p.points >= 1).length;
+    const matchPoints = finished.reduce((sum, p) => sum + p.points, 0);
+
+    const [championPred, groupPredictions] = await Promise.all([
+      prisma.championPrediction.findUnique({ where: { userId: req.user.id } }),
+      prisma.groupPrediction.findMany({ where: { userId: req.user.id } }),
+    ]);
 
     const champPoints = championPred?.points || 0;
+    const groupPoints = groupPredictions.reduce((sum, p) => sum + p.points, 0);
 
     res.json({
       totalPredictions: total,
@@ -260,9 +268,10 @@ router.get('/stats', auth, async (req, res) => {
       exactScores: exact,
       correctResults: correct,
       accuracy: finished.length > 0 ? Math.round((correct / finished.length) * 100) : 0,
-      matchPoints: totalPoints,
+      matchPoints,
       championPoints: champPoints,
-      totalPoints: totalPoints + champPoints,
+      groupPoints,
+      totalPoints: matchPoints + champPoints + groupPoints,
     });
   } catch (err) {
     res.status(500).json({ error: 'Error del servidor' });
