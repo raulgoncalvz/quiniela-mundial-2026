@@ -75,7 +75,7 @@ export default function MatchCard({ match, prediction, onSave, readOnly = false 
     if (isExact)
       pointsBadge = { label: `+${pts} pts ⭐`, class: 'bg-amber-100 text-amber-700' };
     else if (pts > 0)
-      pointsBadge = { label: `+${pts} pt${pts !== 1 ? 's' : ''} ✓`, class: 'bg-blue-100 text-wc-blue' };
+      pointsBadge = { label: `+${pts} pt${pts !== 1 ? 's' : ''} ✓`, class: 'bg-green-100 text-green-600' };
     else
       pointsBadge = { label: '0 pts ✗', class: 'bg-gray-100 text-gray-500' };
   }
