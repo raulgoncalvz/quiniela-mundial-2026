@@ -66,44 +66,45 @@ export default function Home() {
   return (
     <div className="page-container page-enter">
       {/* Hero Banner */}
-      <div className="bg-wc-gradient rounded-3xl p-6 mb-4 text-white relative overflow-hidden">
-        {/* Decorative circles */}
-        <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/5" />
-        <div className="absolute -bottom-6 -left-6 w-24 h-24 rounded-full bg-white/5" />
-
-        <div className="relative z-10">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs font-semibold opacity-70 uppercase tracking-widest mb-1">
-                FIFA World Cup
-              </p>
-              <h1 className="text-3xl font-black leading-tight">
-                MUNDIAL<br />2026 🏆
-              </h1>
-              <p className="text-sm opacity-70 mt-1">USA · Canadá · México</p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs opacity-70">Inicia en</p>
-              <p className="text-4xl font-black">{daysToWC}</p>
-              <p className="text-xs opacity-70">días</p>
-            </div>
+      <div className="bg-wc-gradient rounded-3xl mb-4 text-white relative overflow-hidden">
+        {/* Logo image — top section */}
+        <div className="relative w-full h-36 overflow-hidden rounded-t-3xl">
+          <img
+            src="/wc2026-logo.jpg"
+            alt="FIFA World Cup 2026"
+            className="w-full h-full object-cover object-center"
+          />
+          {/* gradient overlay so text below blends nicely */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-wc-blue/80" />
+          {/* Countdown badge over the image */}
+          <div className="absolute top-3 right-3 bg-black/40 backdrop-blur-sm rounded-2xl px-3 py-1.5 text-right">
+            <p className="text-[10px] opacity-80 uppercase tracking-widest">Inicia en</p>
+            <p className="text-2xl font-black leading-none">{daysToWC}</p>
+            <p className="text-[10px] opacity-80">días</p>
           </div>
+          {/* Title over image */}
+          <div className="absolute bottom-3 left-4">
+            <p className="text-[10px] font-semibold opacity-80 uppercase tracking-widest">FIFA World Cup</p>
+            <h1 className="text-2xl font-black leading-tight drop-shadow">MUNDIAL 2026</h1>
+            <p className="text-xs opacity-70">USA · Canadá · México</p>
+          </div>
+        </div>
 
-          <div className="mt-4 pt-4 border-t border-white/20 flex items-center gap-3">
-            <div className="flex-1">
-              <p className="text-xs opacity-70">Hola, {user.name}!</p>
-              <p className="font-bold">
-                {myRank
-                  ? `#${myRank.position} en el ranking`
-                  : stats?.totalPoints > 0
-                    ? 'Puntos acumulados'
-                    : 'Sin puntos aún'}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-2xl font-black">{stats?.totalPoints ?? 0}</p>
-              <p className="text-xs opacity-70">puntos</p>
-            </div>
+        {/* Bottom info strip */}
+        <div className="px-5 py-3 flex items-center gap-3">
+          <div className="flex-1">
+            <p className="text-xs opacity-70">Hola, {user.name}!</p>
+            <p className="font-bold text-sm">
+              {myRank
+                ? `#${myRank.position} en el ranking`
+                : stats?.totalPoints > 0
+                  ? 'Puntos acumulados'
+                  : 'Sin puntos aún'}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-black">{stats?.totalPoints ?? 0}</p>
+            <p className="text-xs opacity-70">puntos</p>
           </div>
         </div>
       </div>

@@ -4,6 +4,8 @@ import api from '../lib/axios';
 import MatchCard from '../components/MatchCard';
 import Spinner from '../components/Spinner';
 
+const KNOCKOUT_PHASES = ['round32','round16','quarters','semis','third','final'];
+
 const PHASES = [
   { key: 'groups',    label: 'Grupos',     icon: '⚽' },
   { key: 'positions', label: 'Posiciones', icon: '📊' },
@@ -38,6 +40,7 @@ export default function Quiniela() {
   const [progress, setProgress] = useState(0);
   const [posStandings, setPosStandings] = useState({});
   const [posLoading, setPosLoading] = useState(false);
+  const [bracketTeams, setBracketTeams] = useState({});
 
   useEffect(() => {
     if (activePhase !== 'positions') return;
@@ -95,10 +98,24 @@ export default function Quiniela() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // Fetch predicted bracket whenever switching to a knockout phase
+  useEffect(() => {
+    if (!KNOCKOUT_PHASES.includes(activePhase)) return;
+    api.get('/predictions/bracket')
+      .then(({ data }) => setBracketTeams(data))
+      .catch(() => {});
+  }, [activePhase]);
+
   const handleSavePrediction = async (matchId, homeScore, awayScore) => {
     try {
       const { data } = await api.post('/predictions', { matchId, homeScore, awayScore });
       setPredictions(prev => ({ ...prev, [matchId]: data }));
+      // Refresh bracket after saving a knockout prediction (winner may change)
+      if (KNOCKOUT_PHASES.includes(activePhase)) {
+        api.get('/predictions/bracket')
+          .then(({ data: bt }) => setBracketTeams(bt))
+          .catch(() => {});
+      }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al guardar');
       throw err;
@@ -309,14 +326,22 @@ export default function Quiniela() {
             </div>
           ) : (
             <div className="space-y-3">
-              {matches.map(match => (
-                <MatchCard
-                  key={match.id}
-                  match={match}
-                  prediction={predictions[match.id]}
-                  onSave={handleSavePrediction}
-                />
-              ))}
+              {matches.map(match => {
+                const bt = bracketTeams[match.id];
+                const enriched = bt ? {
+                  ...match,
+                  homeTeam: bt.home ? { name: bt.home.name, flag: bt.home.flag } : match.homeTeam,
+                  awayTeam: bt.away ? { name: bt.away.name, flag: bt.away.flag } : match.awayTeam,
+                } : match;
+                return (
+                  <MatchCard
+                    key={match.id}
+                    match={enriched}
+                    prediction={predictions[match.id]}
+                    onSave={handleSavePrediction}
+                  />
+                );
+              })}
             </div>
           )}
 

@@ -95,6 +95,157 @@ router.post('/batch', auth, async (req, res) => {
   }
 });
 
+// GET /api/predictions/bracket — returns predicted team names for each knockout match
+router.get('/bracket', auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // 1. Group matches with teams + user predictions
+    const groupMatches = await prisma.match.findMany({
+      where: { phase: 'groups' },
+      include: {
+        homeTeam: true,
+        awayTeam: true,
+        predictions: { where: { userId } },
+      },
+      orderBy: { matchNumber: 'asc' },
+    });
+
+    // 2. Calculate predicted standings per group
+    const groups = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+    const groupStandings = {};
+
+    for (const group of groups) {
+      const gMatches = groupMatches.filter(m => m.group === group);
+      const ts = {};
+
+      for (const m of gMatches) {
+        if (!ts[m.homeTeamId]) ts[m.homeTeamId] = { id: m.homeTeamId, name: m.homeTeam.name, flag: m.homeTeam.flag, pts: 0, gf: 0, ga: 0, mp: 0 };
+        if (!ts[m.awayTeamId]) ts[m.awayTeamId] = { id: m.awayTeamId, name: m.awayTeam.name, flag: m.awayTeam.flag, pts: 0, gf: 0, ga: 0, mp: 0 };
+
+        const pred = m.predictions[0];
+        if (!pred) continue;
+
+        const h = ts[m.homeTeamId], a = ts[m.awayTeamId];
+        h.mp++; a.mp++;
+        h.gf += pred.homeScore; h.ga += pred.awayScore;
+        a.gf += pred.awayScore; a.ga += pred.homeScore;
+
+        if (pred.homeScore > pred.awayScore)       { h.pts += 3; }
+        else if (pred.homeScore === pred.awayScore) { h.pts += 1; a.pts += 1; }
+        else                                        { a.pts += 3; }
+      }
+
+      groupStandings[group] = Object.values(ts).sort((a, b) => {
+        if (b.pts !== a.pts) return b.pts - a.pts;
+        const gd = (b.gf - b.ga) - (a.gf - a.ga);
+        if (gd !== 0) return gd;
+        if (b.gf !== a.gf) return b.gf - a.gf;
+        return a.name.localeCompare(b.name);
+      });
+    }
+
+    // 3. Knockout matches + user predictions
+    const knockoutMatches = await prisma.match.findMany({
+      where: { phase: { in: ['round32','round16','quarters','semis','third','final'] } },
+      include: { predictions: { where: { userId } } },
+      orderBy: { matchNumber: 'asc' },
+    });
+
+    const matchByNumber = {};
+    for (const m of knockoutMatches) matchByNumber[m.matchNumber] = m;
+
+    // bracketByNumber: matchNumber → { home, away }
+    const bbn = {};
+
+    // Sort all 12 predicted 3rd-place teams by pts → GD → GF → alpha; best 8 qualify
+    const thirdPlaceTeams = groups
+      .map(g => groupStandings[g]?.[2] ? { ...groupStandings[g][2] } : null)
+      .filter(Boolean)
+      .sort((a, b) => {
+        if (b.pts !== a.pts) return b.pts - a.pts;
+        const gd = (b.gf - b.ga) - (a.gf - a.ga);
+        if (gd !== 0) return gd;
+        if (b.gf !== a.gf) return b.gf - a.gf;
+        return a.name.localeCompare(b.name);
+      });
+    const best3rd = thirdPlaceTeams.slice(0, 8).map(t => ({ name: t.name, flag: t.flag }));
+    let t3i = 0; // index into best3rd for the 8 "3rd slot" matches
+    const next3rd = () => best3rd[t3i++] || null;
+
+    const gs = groupStandings; // shorthand
+    const pos = (g, p) => gs[g]?.[p] ? { name: gs[g][p].name, flag: gs[g][p].flag } : null;
+
+    // 4. Round of 32 — FIFA 2026 bracket (confirmed from official template)
+    // Matches with "3rd" slots consume best3rd in order: 74, 77, 79, 80, 81, 82, 85, 87
+    bbn[73] = { home: pos('A',1), away: pos('B',1) };            // 2A vs 2B
+    bbn[74] = { home: pos('E',0), away: next3rd() };              // 1E vs best3rd
+    bbn[75] = { home: pos('F',0), away: pos('C',1) };             // 1F vs 2C
+    bbn[76] = { home: pos('C',0), away: pos('F',1) };             // 1C vs 2F
+    bbn[77] = { home: pos('I',0), away: next3rd() };              // 1I vs best3rd
+    bbn[78] = { home: pos('E',1), away: pos('I',1) };             // 2E vs 2I
+    bbn[79] = { home: pos('A',0), away: next3rd() };              // 1A vs best3rd
+    bbn[80] = { home: pos('L',0), away: next3rd() };              // 1L vs best3rd
+    bbn[81] = { home: pos('D',0), away: next3rd() };              // 1D vs best3rd
+    bbn[82] = { home: pos('G',0), away: next3rd() };              // 1G vs best3rd
+    bbn[83] = { home: pos('K',1), away: pos('L',1) };             // 2K vs 2L
+    bbn[84] = { home: pos('H',0), away: pos('J',1) };             // 1H vs 2J
+    bbn[85] = { home: pos('B',0), away: next3rd() };              // 1B vs best3rd
+    bbn[86] = { home: pos('J',0), away: pos('H',1) };             // 1J vs 2H
+    bbn[87] = { home: pos('K',0), away: next3rd() };              // 1K vs best3rd
+    bbn[88] = { home: pos('D',1), away: pos('G',1) };             // 2D vs 2G
+
+    // Helper: predicted winner/loser of a match (draw = home advances)
+    const winner = (mn) => {
+      const m = matchByNumber[mn];
+      const pred = m?.predictions?.[0];
+      if (!pred || !bbn[mn]?.home || !bbn[mn]?.away) return null;
+      return pred.homeScore >= pred.awayScore ? bbn[mn].home : bbn[mn].away;
+    };
+    const loser = (mn) => {
+      const m = matchByNumber[mn];
+      const pred = m?.predictions?.[0];
+      if (!pred || !bbn[mn]?.home || !bbn[mn]?.away) return null;
+      return pred.homeScore >= pred.awayScore ? bbn[mn].away : bbn[mn].home;
+    };
+
+    // 5. Round of 16 — cross-bracket FIFA 2026 pairings
+    bbn[89] = { home: winner(74), away: winner(77) };
+    bbn[90] = { home: winner(73), away: winner(75) };
+    bbn[91] = { home: winner(76), away: winner(78) };
+    bbn[92] = { home: winner(79), away: winner(80) };
+    bbn[93] = { home: winner(83), away: winner(84) };
+    bbn[94] = { home: winner(81), away: winner(82) };
+    bbn[95] = { home: winner(86), away: winner(88) };
+    bbn[96] = { home: winner(85), away: winner(87) };
+
+    // 6. Quarters
+    bbn[97]  = { home: winner(89), away: winner(90) };
+    bbn[98]  = { home: winner(93), away: winner(94) };
+    bbn[99]  = { home: winner(91), away: winner(92) };
+    bbn[100] = { home: winner(95), away: winner(96) };
+
+    // 7. Semis
+    bbn[101] = { home: winner(97),  away: winner(98)  };
+    bbn[102] = { home: winner(99),  away: winner(100) };
+
+    // 8. 3rd place + Final
+    bbn[103] = { home: loser(101),  away: loser(102)  };
+    bbn[104] = { home: winner(101), away: winner(102) };
+
+    // Convert to matchId-keyed map for frontend
+    const result = {};
+    for (const m of knockoutMatches) {
+      if (bbn[m.matchNumber]) result[m.id] = bbn[m.matchNumber];
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
 // GET /api/predictions/groups
 router.get('/groups', auth, async (req, res) => {
   try {
