@@ -26,6 +26,16 @@ function formatTime(dateStr) {
   return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 }
 
+// Converts bracket slot codes into readable Spanish labels
+function formatSlotLabel(code) {
+  if (!code) return 'Por definir';
+  const c = code.trim();
+  if (c === '3er') return 'Mejor 3°';
+  const m = c.match(/^([12])([A-L])$/);
+  if (m) return `${m[1] === '1' ? '1°' : '2°'} Gr. ${m[2]}`;
+  return 'Por definir';
+}
+
 export default function MatchCard({ match, prediction, onSave, readOnly = false }) {
   const [homeScore, setHomeScore] = useState('');
   const [awayScore, setAwayScore] = useState('');
@@ -100,9 +110,9 @@ export default function MatchCard({ match, prediction, onSave, readOnly = false 
       <div className="flex items-center justify-between gap-2">
         {/* Home Team */}
         <div className="flex flex-col items-center flex-1 min-w-0">
-          <span className="text-3xl mb-1">{homeTeam?.flag || '🏳️'}</span>
-          <span className="text-xs font-semibold text-center text-wc-dark leading-tight line-clamp-2">
-            {homeTeam?.name || match.label?.split(' vs ')[0] || 'TBD'}
+          <span className="text-3xl mb-1">{homeTeam?.flag || '❓'}</span>
+          <span className={`text-xs font-semibold text-center leading-tight line-clamp-2 ${homeTeam ? 'text-wc-dark' : 'text-gray-400 italic'}`}>
+            {homeTeam?.name || formatSlotLabel(match.label?.split(' vs ')[0])}
           </span>
         </div>
 
@@ -183,9 +193,9 @@ export default function MatchCard({ match, prediction, onSave, readOnly = false 
 
         {/* Away Team */}
         <div className="flex flex-col items-center flex-1 min-w-0">
-          <span className="text-3xl mb-1">{awayTeam?.flag || '🏳️'}</span>
-          <span className="text-xs font-semibold text-center text-wc-dark leading-tight line-clamp-2">
-            {awayTeam?.name || match.label?.split(' vs ')[1] || 'TBD'}
+          <span className="text-3xl mb-1">{awayTeam?.flag || '❓'}</span>
+          <span className={`text-xs font-semibold text-center leading-tight line-clamp-2 ${awayTeam ? 'text-wc-dark' : 'text-gray-400 italic'}`}>
+            {awayTeam?.name || formatSlotLabel(match.label?.split(' vs ')[1])}
           </span>
         </div>
       </div>
