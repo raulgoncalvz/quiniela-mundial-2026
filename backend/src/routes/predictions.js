@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
+const THIRD_PLACE_COMBINATIONS = require('../combinaciones.json');
 
 const prisma = new PrismaClient();
 
@@ -118,6 +119,7 @@ router.get('/bracket', auth, async (req, res) => {
     for (const group of groups) {
       const gMatches = groupMatches.filter(m => m.group === group);
       const ts = {};
+      let predictedCount = 0;
 
       for (const m of gMatches) {
         if (!ts[m.homeTeamId]) ts[m.homeTeamId] = { id: m.homeTeamId, name: m.homeTeam.name, flag: m.homeTeam.flag, pts: 0, gf: 0, ga: 0, mp: 0 };
@@ -126,6 +128,7 @@ router.get('/bracket', auth, async (req, res) => {
         const pred = m.predictions[0];
         if (!pred) continue;
 
+        predictedCount++;
         const h = ts[m.homeTeamId], a = ts[m.awayTeamId];
         h.mp++; a.mp++;
         h.gf += pred.homeScore; h.ga += pred.awayScore;
@@ -136,13 +139,17 @@ router.get('/bracket', auth, async (req, res) => {
         else                                        { a.pts += 3; }
       }
 
-      groupStandings[group] = Object.values(ts).sort((a, b) => {
-        if (b.pts !== a.pts) return b.pts - a.pts;
-        const gd = (b.gf - b.ga) - (a.gf - a.ga);
-        if (gd !== 0) return gd;
-        if (b.gf !== a.gf) return b.gf - a.gf;
-        return a.name.localeCompare(b.name);
-      });
+      groupStandings[group] = {
+        teams: Object.values(ts).sort((a, b) => {
+          if (b.pts !== a.pts) return b.pts - a.pts;
+          const gd = (b.gf - b.ga) - (a.gf - a.ga);
+          if (gd !== 0) return gd;
+          if (b.gf !== a.gf) return b.gf - a.gf;
+          return a.name.localeCompare(b.name);
+        }),
+        predictedCount,
+        totalMatches: gMatches.length,
+      };
     }
 
     // 3. Knockout matches + user predictions
@@ -158,41 +165,70 @@ router.get('/bracket', auth, async (req, res) => {
     // bracketByNumber: matchNumber → { home, away }
     const bbn = {};
 
-    // Sort all 12 predicted 3rd-place teams by pts → GD → GF → alpha; best 8 qualify
-    const thirdPlaceTeams = groups
-      .map(g => groupStandings[g]?.[2] ? { ...groupStandings[g][2] } : null)
-      .filter(Boolean)
-      .sort((a, b) => {
-        if (b.pts !== a.pts) return b.pts - a.pts;
-        const gd = (b.gf - b.ga) - (a.gf - a.ga);
-        if (gd !== 0) return gd;
-        if (b.gf !== a.gf) return b.gf - a.gf;
-        return a.name.localeCompare(b.name);
-      });
-    const best3rd = thirdPlaceTeams.slice(0, 8).map(t => ({ name: t.name, flag: t.flag }));
-    let t3i = 0; // index into best3rd for the 8 "3rd slot" matches
-    const next3rd = () => best3rd[t3i++] || null;
+    const gs = groupStandings;
 
-    const gs = groupStandings; // shorthand
-    const pos = (g, p) => gs[g]?.[p] ? { name: gs[g][p].name, flag: gs[g][p].flag } : null;
+    // pos returns null if user hasn't predicted all matches in that group yet
+    const pos = (g, p) => {
+      const s = gs[g];
+      if (!s || s.predictedCount < s.totalMatches) return null;
+      return s.teams[p] ? { name: s.teams[p].name, flag: s.teams[p].flag } : null;
+    };
 
-    // 4. Round of 32 — FIFA 2026 bracket (confirmed from official template)
-    // Matches with "3rd" slots consume best3rd in order: 74, 77, 79, 80, 81, 82, 85, 87
+    // Los 8 mejores terceros solo se determinan cuando los 12 grupos están completos.
+    // Cada slot tiene una asignación específica según qué grupos clasificaron
+    // (tabla oficial FIFA 2026 con 495 combinaciones).
+    const allGroupsComplete = groups.every(
+      g => gs[g]?.predictedCount === gs[g]?.totalMatches && gs[g]?.totalMatches > 0
+    );
+
+    // best3rdSlot: { '1A': {name,flag}, '1B': {name,flag}, ... } — qué 3° va a cada slot
+    const best3rdSlot = {};
+    if (allGroupsComplete) {
+      // Ordenar los 12 terceros: los mejores 8 clasifican
+      const thirdsRanked = groups
+        .map(g => gs[g]?.teams?.[2] ? { group: g, ...gs[g].teams[2] } : null)
+        .filter(Boolean)
+        .sort((a, b) => {
+          if (b.pts !== a.pts) return b.pts - a.pts;
+          const gd = (b.gf - b.ga) - (a.gf - a.ga);
+          if (gd !== 0) return gd;
+          if (b.gf !== a.gf) return b.gf - a.gf;
+          return a.name.localeCompare(b.name);
+        });
+
+      // Clave = letras de grupos clasificados ordenadas alfabéticamente
+      const qualifyingKey = thirdsRanked.slice(0, 8).map(t => t.group).sort().join('');
+      const assignment = THIRD_PLACE_COMBINATIONS[qualifyingKey];
+
+      if (assignment) {
+        // assignment: { '1A': '3X', '1B': '3Y', ... }  — '3X' = 3° del grupo X
+        for (const [slot, groupRef] of Object.entries(assignment)) {
+          const grp = groupRef[1]; // '3E' → 'E'
+          const team = gs[grp]?.teams?.[2];
+          if (team) best3rdSlot[slot] = { name: team.name, flag: team.flag };
+        }
+      }
+    }
+
+    // Helper: devuelve el 3° asignado a un slot específico (null si aún no se conoce)
+    const third = (slot) => best3rdSlot[slot] || null;
+
+    // 4. Round of 32 — FIFA 2026 bracket oficial
     bbn[73] = { home: pos('A',1), away: pos('B',1) };            // 2A vs 2B
-    bbn[74] = { home: pos('E',0), away: next3rd() };              // 1E vs best3rd
+    bbn[74] = { home: pos('E',0), away: third('1E') };            // 1E vs 3er(ABCDF)
     bbn[75] = { home: pos('F',0), away: pos('C',1) };             // 1F vs 2C
     bbn[76] = { home: pos('C',0), away: pos('F',1) };             // 1C vs 2F
-    bbn[77] = { home: pos('I',0), away: next3rd() };              // 1I vs best3rd
+    bbn[77] = { home: pos('I',0), away: third('1I') };            // 1I vs 3er(CDFGH)
     bbn[78] = { home: pos('E',1), away: pos('I',1) };             // 2E vs 2I
-    bbn[79] = { home: pos('A',0), away: next3rd() };              // 1A vs best3rd
-    bbn[80] = { home: pos('L',0), away: next3rd() };              // 1L vs best3rd
-    bbn[81] = { home: pos('D',0), away: next3rd() };              // 1D vs best3rd
-    bbn[82] = { home: pos('G',0), away: next3rd() };              // 1G vs best3rd
+    bbn[79] = { home: pos('A',0), away: third('1A') };            // 1A vs 3er(CEFHI)
+    bbn[80] = { home: pos('L',0), away: third('1L') };            // 1L vs 3er(EHIJK)
+    bbn[81] = { home: pos('D',0), away: third('1D') };            // 1D vs 3er(BEFIJ)
+    bbn[82] = { home: pos('G',0), away: third('1G') };            // 1G vs 3er(AEHIJ)
     bbn[83] = { home: pos('K',1), away: pos('L',1) };             // 2K vs 2L
     bbn[84] = { home: pos('H',0), away: pos('J',1) };             // 1H vs 2J
-    bbn[85] = { home: pos('B',0), away: next3rd() };              // 1B vs best3rd
+    bbn[85] = { home: pos('B',0), away: third('1B') };            // 1B vs 3er(EFGIJ)
     bbn[86] = { home: pos('J',0), away: pos('H',1) };             // 1J vs 2H
-    bbn[87] = { home: pos('K',0), away: next3rd() };              // 1K vs best3rd
+    bbn[87] = { home: pos('K',0), away: third('1K') };            // 1K vs 3er(DEIJL)
     bbn[88] = { home: pos('D',1), away: pos('G',1) };             // 2D vs 2G
 
     // Helper: predicted winner/loser of a match (draw = home advances)
