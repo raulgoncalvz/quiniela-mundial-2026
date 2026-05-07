@@ -26,17 +26,25 @@ function formatTime(dateStr) {
   return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Caracas' });
 }
 
-function formatSlotLabel(code) {
-  if (!code) return 'Por definir';
+// Returns the compact badge text for a slot code
+function formatSlotBadge(code) {
+  if (!code) return '?';
   const c = code.trim();
-  if (c === '3er' || /^3[A-L]+$/.test(c)) return 'Mejor 3°';
-  const m = c.match(/^([12])([A-L])$/);
-  if (m) return `${m[1] === '1' ? '1°' : '2°'} Gr. ${m[2]}`;
+  if (c === '3er' || /^3[A-L]+$/.test(c)) return '3°';
+  if (/^[12][A-L]$/.test(c)) return c;          // "2A", "1E" — already compact
   const wm = c.match(/^W(\d+)$/);
-  if (wm) return `Gan. M${wm[1]}`;
+  if (wm) return `W${wm[1]}`;
   const lm = c.match(/^L(\d+)$/);
-  if (lm) return `Per. M${lm[1]}`;
+  if (lm) return `Per.${lm[1]}`;
   return c;
+}
+
+// Returns the subtitle for a slot (only for 3er: the group letters)
+function formatSlotSub(code) {
+  if (!code) return null;
+  const m = code.trim().match(/^3([A-L]+)$/);
+  if (m) return m[1].split('').join('·');        // "ABCDF" → "A·B·C·D·F"
+  return null;
 }
 
 export default function MatchCard({ match, prediction, onSave, readOnly = false }) {
@@ -113,15 +121,25 @@ export default function MatchCard({ match, prediction, onSave, readOnly = false 
       <div className="flex items-center justify-between gap-2">
         {/* Home Team */}
         <div className="flex flex-col items-center flex-1 min-w-0">
-          {homeTeam
-            ? <span className="text-3xl mb-1">{homeTeam.flag}</span>
-            : <span className="text-xs font-bold text-gray-400 mb-1 bg-gray-100 border border-dashed border-gray-300 rounded px-2 py-1 whitespace-nowrap">
-                {formatSlotLabel(match.label?.split(' vs ')[0]) || '—'}
+          {homeTeam ? (
+            <>
+              <span className="text-3xl mb-1">{homeTeam.flag}</span>
+              <span className="text-xs font-semibold text-center leading-tight line-clamp-2 text-wc-dark">
+                {homeTeam.name}
               </span>
-          }
-          <span className={`text-xs font-semibold text-center leading-tight line-clamp-2 ${homeTeam ? 'text-wc-dark' : 'text-gray-400'}`}>
-            {homeTeam?.name || formatSlotLabel(match.label?.split(' vs ')[0])}
-          </span>
+            </>
+          ) : (
+            <>
+              <span className="text-sm font-black text-wc-blue bg-blue-50 border border-dashed border-blue-300 rounded-lg px-2.5 py-1 mb-0.5 whitespace-nowrap">
+                {formatSlotBadge(match.label?.split(' vs ')[0])}
+              </span>
+              {formatSlotSub(match.label?.split(' vs ')[0]) && (
+                <span className="text-[10px] font-bold text-gray-400 tracking-widest">
+                  {formatSlotSub(match.label?.split(' vs ')[0])}
+                </span>
+              )}
+            </>
+          )}
         </div>
 
         {/* Score area */}
@@ -201,15 +219,25 @@ export default function MatchCard({ match, prediction, onSave, readOnly = false 
 
         {/* Away Team */}
         <div className="flex flex-col items-center flex-1 min-w-0">
-          {awayTeam
-            ? <span className="text-3xl mb-1">{awayTeam.flag}</span>
-            : <span className="text-xs font-bold text-gray-400 mb-1 bg-gray-100 border border-dashed border-gray-300 rounded px-2 py-1 whitespace-nowrap">
-                {formatSlotLabel(match.label?.split(' vs ')[1]?.trim()) || '—'}
+          {awayTeam ? (
+            <>
+              <span className="text-3xl mb-1">{awayTeam.flag}</span>
+              <span className="text-xs font-semibold text-center leading-tight line-clamp-2 text-wc-dark">
+                {awayTeam.name}
               </span>
-          }
-          <span className={`text-xs font-semibold text-center leading-tight line-clamp-2 ${awayTeam ? 'text-wc-dark' : 'text-gray-400'}`}>
-            {awayTeam?.name || formatSlotLabel(match.label?.split(' vs ')[1])}
-          </span>
+            </>
+          ) : (
+            <>
+              <span className="text-sm font-black text-wc-blue bg-blue-50 border border-dashed border-blue-300 rounded-lg px-2.5 py-1 mb-0.5 whitespace-nowrap">
+                {formatSlotBadge(match.label?.split(' vs ')[1]?.trim())}
+              </span>
+              {formatSlotSub(match.label?.split(' vs ')[1]?.trim()) && (
+                <span className="text-[10px] font-bold text-gray-400 tracking-widest">
+                  {formatSlotSub(match.label?.split(' vs ')[1]?.trim())}
+                </span>
+              )}
+            </>
+          )}
         </div>
       </div>
 
