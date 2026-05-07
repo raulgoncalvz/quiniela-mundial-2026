@@ -21,6 +21,11 @@ try {
 } catch (err) {
   console.error('⚠️  Error en fix-home-away:', err.message);
 }
+try {
+  execSync('node scripts/fix-labels.js', { stdio: 'inherit' });
+} catch (err) {
+  console.error('⚠️  Error en fix-labels:', err.message);
+}
 // ─────────────────────────────────────────────────────────────────
 
 const app = express();

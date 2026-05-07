@@ -32,6 +32,10 @@ function formatSlotLabel(code) {
   if (c === '3er' || /^3[A-L]+$/.test(c)) return 'Mejor 3°';
   const m = c.match(/^([12])([A-L])$/);
   if (m) return `${m[1] === '1' ? '1°' : '2°'} Gr. ${m[2]}`;
+  const wm = c.match(/^W(\d+)$/);
+  if (wm) return `Gan. M${wm[1]}`;
+  const lm = c.match(/^L(\d+)$/);
+  if (lm) return `Per. M${lm[1]}`;
   return c;
 }
 
@@ -112,7 +116,7 @@ export default function MatchCard({ match, prediction, onSave, readOnly = false 
           {homeTeam
             ? <span className="text-3xl mb-1">{homeTeam.flag}</span>
             : <span className="text-xs font-bold text-gray-400 mb-1 bg-gray-100 border border-dashed border-gray-300 rounded px-2 py-1 whitespace-nowrap">
-                {match.label?.split(' vs ')[0]?.replace(/^3[A-L]+$/, 'Mejor 3°') || '—'}
+                {formatSlotLabel(match.label?.split(' vs ')[0]) || '—'}
               </span>
           }
           <span className={`text-xs font-semibold text-center leading-tight line-clamp-2 ${homeTeam ? 'text-wc-dark' : 'text-gray-400'}`}>
@@ -200,7 +204,7 @@ export default function MatchCard({ match, prediction, onSave, readOnly = false 
           {awayTeam
             ? <span className="text-3xl mb-1">{awayTeam.flag}</span>
             : <span className="text-xs font-bold text-gray-400 mb-1 bg-gray-100 border border-dashed border-gray-300 rounded px-2 py-1 whitespace-nowrap">
-                {match.label?.split(' vs ')[1]?.trim().replace(/^3[A-L]+$/, 'Mejor 3°') || '—'}
+                {formatSlotLabel(match.label?.split(' vs ')[1]?.trim()) || '—'}
               </span>
           }
           <span className={`text-xs font-semibold text-center leading-tight line-clamp-2 ${awayTeam ? 'text-wc-dark' : 'text-gray-400'}`}>

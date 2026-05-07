@@ -3,7 +3,7 @@ services:
     name: quiniela-mundial-2026
     env: node
     rootDir: backend
-    buildCommand: npm install && npx prisma generate && npx prisma db push && node prisma/seed.js && node scripts/fix-dates.js && node scripts/fix-home-away.js
+    buildCommand: npm install && npx prisma generate && npx prisma db push && node prisma/seed.js && node scripts/fix-dates.js && node scripts/fix-home-away.js && node scripts/fix-labels.js
     startCommand: node server.js
     envVars:
       - key: NODE_ENV
