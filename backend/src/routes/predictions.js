@@ -282,6 +282,101 @@ router.get('/bracket', auth, async (req, res) => {
   }
 });
 
+// GET /api/predictions/thirds — mejores terceros de los 12 grupos y sus llaves en R32
+router.get('/thirds', auth, async (req, res) => {
+  try {
+    const groups = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+    const userId = req.user.id;
+
+    const allGroupMatches = await prisma.match.findMany({
+      where: { phase: 'groups' },
+      include: { homeTeam: true, awayTeam: true },
+    });
+
+    const allPreds = await prisma.prediction.findMany({
+      where: { userId, match: { phase: 'groups' } },
+    });
+    const predMap = {};
+    for (const p of allPreds) predMap[p.matchId] = p;
+
+    let completedGroups = 0;
+    const thirdsRaw = [];
+
+    for (const group of groups) {
+      const gMatches = allGroupMatches.filter(m => m.group === group);
+      const predictedCount = gMatches.filter(m => predMap[m.id]).length;
+      if (predictedCount < gMatches.length) continue;
+
+      completedGroups++;
+      const stats = {};
+      for (const m of gMatches) {
+        if (!stats[m.homeTeamId]) stats[m.homeTeamId] = { team: m.homeTeam, mp:0,w:0,d:0,l:0,gf:0,ga:0,pts:0 };
+        if (!stats[m.awayTeamId]) stats[m.awayTeamId] = { team: m.awayTeam, mp:0,w:0,d:0,l:0,gf:0,ga:0,pts:0 };
+        const pred = predMap[m.id];
+        const home = stats[m.homeTeamId], away = stats[m.awayTeamId];
+        home.mp++; away.mp++;
+        home.gf += pred.homeScore; home.ga += pred.awayScore;
+        away.gf += pred.awayScore; away.ga += pred.homeScore;
+        if (pred.homeScore > pred.awayScore)       { home.w++; home.pts += 3; away.l++; }
+        else if (pred.homeScore < pred.awayScore)  { away.w++; away.pts += 3; home.l++; }
+        else { home.d++; home.pts++; away.d++; away.pts++; }
+      }
+      const sorted = Object.values(stats).sort((a, b) => {
+        if (b.pts !== a.pts) return b.pts - a.pts;
+        const gd = (b.gf - b.ga) - (a.gf - a.ga);
+        if (gd !== 0) return gd;
+        if (b.gf !== a.gf) return b.gf - a.gf;
+        return a.team.name.localeCompare(b.team.name);
+      });
+      if (sorted[2]) thirdsRaw.push({ group, ...sorted[2] });
+    }
+
+    // Sort all thirds by pts, GD, GF, alphabetical
+    thirdsRaw.sort((a, b) => {
+      if (b.pts !== a.pts) return b.pts - a.pts;
+      const gd = (b.gf - b.ga) - (a.gf - a.ga);
+      if (gd !== 0) return gd;
+      if (b.gf !== a.gf) return b.gf - a.gf;
+      return a.team.name.localeCompare(b.team.name);
+    });
+
+    const allGroupsComplete = completedGroups === 12;
+
+    // Slot assignments only when all 12 groups are predicted
+    let slotAssignments = {};
+    if (allGroupsComplete) {
+      const qualifyingKey = thirdsRaw.slice(0, 8).map(t => t.group).sort().join('');
+      slotAssignments = THIRD_PLACE_COMBINATIONS[qualifyingKey] || {};
+    }
+
+    const thirds = thirdsRaw.map((t, idx) => {
+      let slot = null;
+      if (allGroupsComplete && idx < 8) {
+        for (const [s, groupRef] of Object.entries(slotAssignments)) {
+          if (groupRef === `3${t.group}`) { slot = s; break; }
+        }
+      }
+      return {
+        rank: idx + 1,
+        group: t.group,
+        name: t.team.name,
+        flag: t.team.flag,
+        mp: t.mp, w: t.w, d: t.d, l: t.l,
+        gf: t.gf, ga: t.ga,
+        gd: t.gf - t.ga,
+        pts: t.pts,
+        qualifies: allGroupsComplete ? idx < 8 : null,
+        slot,
+      };
+    });
+
+    res.json({ thirds, completedGroups, allGroupsComplete });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
 // GET /api/predictions/groups
 router.get('/groups', auth, async (req, res) => {
   try {

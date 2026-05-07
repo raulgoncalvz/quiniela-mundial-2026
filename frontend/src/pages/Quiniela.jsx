@@ -41,6 +41,8 @@ export default function Quiniela() {
   const [posStandings, setPosStandings] = useState({});
   const [posLoading, setPosLoading] = useState(false);
   const [bracketTeams, setBracketTeams] = useState({});
+  const [thirds, setThirds] = useState(null);
+  const [thirdsLoading, setThirdsLoading] = useState(false);
 
   useEffect(() => {
     if (activePhase !== 'positions') return;
@@ -57,6 +59,15 @@ export default function Quiniela() {
     };
     load();
   }, [activeGroup, activePhase]);
+
+  useEffect(() => {
+    if (activePhase !== 'positions') return;
+    setThirdsLoading(true);
+    api.get('/predictions/thirds')
+      .then(({ data }) => setThirds(data))
+      .catch(() => {})
+      .finally(() => setThirdsLoading(false));
+  }, [activePhase]);
 
   const loadData = useCallback(async () => {
     if (activePhase === 'positions') return;
@@ -309,6 +320,100 @@ export default function Quiniela() {
                 );
               })}
             </div>
+          </div>
+
+          {/* Mejores Terceros */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="font-bold text-wc-dark">🥉 Mejores Terceros</h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {thirds?.allGroupsComplete
+                    ? 'Los 8 mejores clasifican a la Ronda de 32'
+                    : `${thirds?.completedGroups ?? 0}/12 grupos completados — completa todos para ver las llaves`}
+                </p>
+              </div>
+              {thirds?.allGroupsComplete && (
+                <span className="text-xs font-bold px-2 py-1 rounded-lg bg-green-100 text-green-700">
+                  Llaves asignadas ✓
+                </span>
+              )}
+            </div>
+
+            {thirdsLoading ? (
+              <div className="flex justify-center py-6"><Spinner size="md" /></div>
+            ) : !thirds || thirds.thirds.length === 0 ? (
+              <div className="text-center py-6 text-gray-400">
+                <p className="text-3xl mb-2">⚽</p>
+                <p className="text-sm font-semibold">Completa al menos un grupo para ver los terceros</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-gray-400 border-b border-gray-100">
+                      <th className="text-left py-1.5 w-6">#</th>
+                      <th className="text-left py-1.5 w-6">Gr.</th>
+                      <th className="text-left py-1.5">Equipo</th>
+                      <th className="text-center py-1.5 w-7">PJ</th>
+                      <th className="text-center py-1.5 w-7">G</th>
+                      <th className="text-center py-1.5 w-7">E</th>
+                      <th className="text-center py-1.5 w-7">P</th>
+                      <th className="text-center py-1.5 w-8">GD</th>
+                      <th className="text-center py-1.5 w-8 font-bold text-wc-dark">Pts</th>
+                      {thirds.allGroupsComplete && (
+                        <th className="text-center py-1.5">Rival R32</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {thirds.thirds.map((t, idx) => {
+                      const qualifies = thirds.allGroupsComplete ? idx < 8 : idx < 8;
+                      const rowBg = thirds.allGroupsComplete
+                        ? (idx < 8 ? 'bg-green-50' : '')
+                        : (idx < 8 ? 'bg-blue-50/40' : '');
+                      return (
+                        <tr key={t.group} className={rowBg}>
+                          <td className="py-2 font-bold text-gray-400">{t.rank}</td>
+                          <td className="py-2 font-bold text-wc-blue">{t.group}</td>
+                          <td className="py-2">
+                            <span className="mr-1">{t.flag}</span>
+                            <span className="font-semibold text-wc-dark">{t.name}</span>
+                            {thirds.allGroupsComplete && idx < 8 && (
+                              <span className="ml-1 text-green-500 text-xs">✓</span>
+                            )}
+                            {thirds.allGroupsComplete && idx >= 8 && (
+                              <span className="ml-1 text-red-400 text-xs">✗</span>
+                            )}
+                          </td>
+                          <td className="py-2 text-center text-gray-500">{t.mp}</td>
+                          <td className="py-2 text-center text-gray-500">{t.w}</td>
+                          <td className="py-2 text-center text-gray-500">{t.d}</td>
+                          <td className="py-2 text-center text-gray-500">{t.l}</td>
+                          <td className="py-2 text-center text-gray-500">{t.gd > 0 ? `+${t.gd}` : t.gd}</td>
+                          <td className="py-2 text-center font-black text-wc-dark">{t.pts}</td>
+                          {thirds.allGroupsComplete && (
+                            <td className="py-2 text-center">
+                              {t.slot
+                                ? <span className="text-xs font-bold text-wc-blue bg-blue-50 px-1.5 py-0.5 rounded">
+                                    vs 1° Gr. {t.slot[1]}
+                                  </span>
+                                : <span className="text-gray-300">—</span>
+                              }
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {thirds && !thirds.allGroupsComplete && thirds.thirds.length > 0 && (
+              <p className="text-xs text-gray-400 text-center mt-3">
+                Las llaves de Ronda 32 se asignan cuando los 12 grupos estén completos
+              </p>
+            )}
           </div>
         </div>
       )}
