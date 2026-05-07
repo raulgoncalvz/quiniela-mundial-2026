@@ -165,28 +165,36 @@ router.put('/:id/result', auth, admin, async (req, res) => {
       }
     }
 
-    // Award advancement points for knockout winners
+    // Award advancement points derived automatically from match predictions
     const NEXT_ROUND_MAP = { round32: 'round16', round16: 'quarters', quarters: 'semis', semis: 'final' };
     const ADV_BET_PHASE = { round16: 'bet_round16', quarters: 'bet_quarters', semis: 'bet_semis', final: 'bet_final' };
     let advancementUpdated = 0;
 
-    if (NEXT_ROUND_MAP[match.phase] && finalStatus === 'finished') {
+    if (NEXT_ROUND_MAP[match.phase] && finalStatus === 'finished' && match.homeTeam && match.awayTeam) {
       const hScore = parseInt(homeScore);
       const aScore = parseInt(awayScore);
-      const winnerTeam = hScore >= aScore ? match.homeTeam : match.awayTeam;
+      const homeWins = hScore >= aScore;
+      const winnerName = homeWins ? match.homeTeam.name : match.awayTeam.name;
+      const nextRound = NEXT_ROUND_MAP[match.phase];
+      const advCfg = await getScoringConfig(ADV_BET_PHASE[nextRound]);
 
-      if (winnerTeam) {
-        const nextRound = NEXT_ROUND_MAP[match.phase];
-        const advCfg = await getScoringConfig(ADV_BET_PHASE[nextRound]);
-        const advPreds = await prisma.advancementPrediction.findMany({
-          where: { round: nextRound, teamName: winnerTeam.name },
-        });
-        for (const pred of advPreds) {
-          await prisma.advancementPrediction.update({ where: { id: pred.id }, data: { points: advCfg.correctResult } });
+      // Clear previous advancement records for both teams of this match (handles result corrections)
+      await prisma.advancementPrediction.deleteMany({
+        where: { round: nextRound, teamName: { in: [match.homeTeam.name, match.awayTeam.name] } },
+      });
+
+      // Award to users who predicted the correct winner direction
+      const advRecords = [];
+      for (const pred of predictions) {
+        const predHomeWins = pred.homeScore >= pred.awayScore;
+        if (predHomeWins === homeWins) {
+          advRecords.push({ userId: pred.userId, round: nextRound, teamName: winnerName, points: advCfg.correctResult });
         }
-        advancementUpdated = advPreds.length;
-        if (advPreds.length > 0)
-          console.log(`🚀 ${winnerTeam.name} → ${nextRound}: ${advPreds.length} usuarios premiados (${advCfg.correctResult}pts)`);
+      }
+      if (advRecords.length > 0) {
+        await prisma.advancementPrediction.createMany({ data: advRecords, skipDuplicates: true });
+        advancementUpdated = advRecords.length;
+        console.log(`🚀 ${winnerName} → ${nextRound}: ${advRecords.length} usuarios premiados (${advCfg.correctResult}pts)`);
       }
     }
 

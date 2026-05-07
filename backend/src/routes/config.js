@@ -184,34 +184,34 @@ router.post('/scoring/recalculate', auth, admin, async (req, res) => {
       groupsRecalculated++;
     }
 
-    // 3. Recalculate advancement points
-    await prisma.advancementPrediction.updateMany({ data: { points: 0 } });
+    // 3. Recalculate advancement points derived from match predictions
+    await prisma.advancementPrediction.deleteMany({});
     let advancementUpdated = 0;
 
     const knockoutFinished = await prisma.match.findMany({
-      where: { status: 'finished', phase: { in: ['round32', 'round16', 'quarters', 'semis'] } },
-      include: { homeTeam: true, awayTeam: true },
+      where: { status: 'finished', phase: { in: Object.keys(NEXT_ROUND_MAP) } },
+      include: { homeTeam: true, awayTeam: true, predictions: true },
     });
 
     for (const m of knockoutFinished) {
-      if (m.homeScore === null || m.awayScore === null) continue;
-      const winnerTeam = m.homeScore >= m.awayScore ? m.homeTeam : m.awayTeam;
-      if (!winnerTeam) continue;
-
+      if (!m.homeTeam || !m.awayTeam || m.homeScore === null || m.awayScore === null) continue;
+      const homeWins = m.homeScore >= m.awayScore;
+      const winnerName = homeWins ? m.homeTeam.name : m.awayTeam.name;
       const nextRound = NEXT_ROUND_MAP[m.phase];
       const betPhase = ADV_BET_PHASE[nextRound];
       const advCfg = scoringMap[betPhase] || { correctResult: 0 };
       if (!advCfg.correctResult) continue;
 
-      const advPreds = await prisma.advancementPrediction.findMany({
-        where: { round: nextRound, teamName: winnerTeam.name },
-      });
-      for (const pred of advPreds) {
-        await prisma.advancementPrediction.update({
-          where: { id: pred.id },
-          data: { points: advCfg.correctResult },
-        });
-        advancementUpdated++;
+      for (const pred of m.predictions) {
+        const predHomeWins = pred.homeScore >= pred.awayScore;
+        if (predHomeWins === homeWins) {
+          await prisma.advancementPrediction.upsert({
+            where: { userId_round_teamName: { userId: pred.userId, round: nextRound, teamName: winnerName } },
+            update: { points: advCfg.correctResult },
+            create: { userId: pred.userId, round: nextRound, teamName: winnerName, points: advCfg.correctResult },
+          });
+          advancementUpdated++;
+        }
       }
     }
 

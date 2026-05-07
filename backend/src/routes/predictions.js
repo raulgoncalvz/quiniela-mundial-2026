@@ -5,8 +5,6 @@ const THIRD_PLACE_COMBINATIONS = require('../combinaciones.json');
 
 const prisma = new PrismaClient();
 
-const ROUND_LIMITS = { round16: 16, quarters: 8, semis: 4, final: 2 };
-
 async function isLocked() {
   try {
     const firstMatch = await prisma.match.findFirst({ orderBy: { date: 'asc' } });
@@ -547,53 +545,6 @@ router.post('/champion', auth, async (req, res) => {
     });
 
     res.json(pred);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error del servidor' });
-  }
-});
-
-// GET /api/predictions/advancement
-router.get('/advancement', auth, async (req, res) => {
-  try {
-    const preds = await prisma.advancementPrediction.findMany({
-      where: { userId: req.user.id },
-      orderBy: [{ round: 'asc' }, { teamName: 'asc' }],
-    });
-    const result = { round16: [], quarters: [], semis: [], final: [] };
-    for (const p of preds) {
-      if (result[p.round]) result[p.round].push({ teamName: p.teamName, points: p.points });
-    }
-    res.json(result);
-  } catch {
-    res.status(500).json({ error: 'Error del servidor' });
-  }
-});
-
-// POST /api/predictions/advancement
-router.post('/advancement', auth, async (req, res) => {
-  const { round, teams } = req.body;
-  if (!ROUND_LIMITS[round]) return res.status(400).json({ error: 'Ronda inválida' });
-  if (!Array.isArray(teams)) return res.status(400).json({ error: 'teams debe ser un array' });
-  if (teams.length > ROUND_LIMITS[round])
-    return res.status(400).json({ error: `Máximo ${ROUND_LIMITS[round]} equipos para esta ronda` });
-
-  if (await isLocked())
-    return res.status(423).json({ error: 'Las predicciones están bloqueadas. El torneo ya comenzó.' });
-
-  try {
-    await prisma.advancementPrediction.deleteMany({ where: { userId: req.user.id, round } });
-    if (teams.length > 0) {
-      await prisma.advancementPrediction.createMany({
-        data: teams.filter(t => t?.trim()).map(t => ({
-          userId: req.user.id, round, teamName: t.trim(),
-        })),
-      });
-    }
-    const saved = await prisma.advancementPrediction.findMany({
-      where: { userId: req.user.id, round },
-    });
-    res.json(saved);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error del servidor' });
