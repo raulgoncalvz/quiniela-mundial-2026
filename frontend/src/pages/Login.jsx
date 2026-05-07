@@ -6,7 +6,7 @@ import Spinner from '../components/Spinner';
 
 export default function Login() {
   const { login } = useAuth();
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [form, setForm] = useState({ login: '', password: '' });
   const [loading, setLoading] = useState(false);
 
   const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
@@ -15,7 +15,7 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     try {
-      await login(form.email, form.password);
+      await login(form.login, form.password);
       toast.success('¡Bienvenido de vuelta!');
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al iniciar sesión');
@@ -41,15 +41,15 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-sm font-semibold text-gray-700 block mb-1">Email</label>
+            <label className="text-sm font-semibold text-gray-700 block mb-1">Usuario o Email</label>
             <input
-              name="email"
-              type="email"
-              autoComplete="email"
-              value={form.email}
+              name="login"
+              type="text"
+              autoComplete="username"
+              value={form.login}
               onChange={handleChange}
               className="input-field"
-              placeholder="tu@email.com"
+              placeholder="usuario o tu@email.com"
               required
             />
           </div>
@@ -83,6 +83,7 @@ export default function Login() {
         {/* Demo hint */}
         <div className="mt-6 p-3 bg-wc-light-bg rounded-xl text-xs text-gray-500 text-center">
           <strong>Demo:</strong> demo@quiniela.com · demo123
+          <br />El admin crea tu usuario — inicia con tu usuario y contraseña
         </div>
       </div>
     </div>

@@ -52,6 +52,7 @@ app.use('/api/predictions', require('./src/routes/predictions'));
 app.use('/api/ranking', require('./src/routes/ranking'));
 app.use('/api/teams', require('./src/routes/teams'));
 app.use('/api/config', require('./src/routes/config'));
+app.use('/api/users', require('./src/routes/users'));
 
 app.get('/health', (req, res) => res.json({ ok: true, time: new Date() }));
 

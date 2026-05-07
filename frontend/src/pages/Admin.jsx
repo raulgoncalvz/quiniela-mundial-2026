@@ -14,6 +14,7 @@ const PHASES = [
   { key: 'third',     label: '3er Lugar' },
   { key: 'final',     label: 'Final' },
   { key: 'scoring',   label: '⚙️ Puntos' },
+  { key: 'users',     label: '👥 Usuarios' },
 ];
 
 const GROUP_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L'];
@@ -33,6 +34,11 @@ export default function Admin() {
   const [recalculating, setRecalculating] = useState(false);
   const [champForm, setChampForm] = useState({ champion:'', runnerUp:'', third:'', topScorer:'', bestPlayer:'', bestGoalkeeper:'' });
   const [calculatingChamp, setCalculatingChamp] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [newUser, setNewUser] = useState({ name: '', username: '', password: '' });
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [deletingUser, setDeletingUser] = useState({});
+  const [resetPass, setResetPass] = useState({}); // { [id]: newPassword }
 
   const loadGroupStandings = async (group) => {
     setLoadingStandings(true);
@@ -110,9 +116,61 @@ export default function Admin() {
     }
   };
 
+  const loadUsers = async () => {
+    try {
+      const { data } = await api.get('/users');
+      setUsers(data);
+    } catch {
+      toast.error('Error al cargar usuarios');
+    }
+  };
+
+  const handleCreateUser = async e => {
+    e.preventDefault();
+    if (!newUser.name || !newUser.username || !newUser.password) return;
+    setCreatingUser(true);
+    try {
+      const { data } = await api.post('/users', newUser);
+      setUsers(prev => [...prev, data]);
+      setNewUser({ name: '', username: '', password: '' });
+      toast.success(`✅ Usuario "${data.username}" creado`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al crear usuario');
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
+  const handleDeleteUser = async (id, name) => {
+    if (!confirm(`¿Eliminar a ${name}? Se borrarán todos sus pronósticos.`)) return;
+    setDeletingUser(prev => ({ ...prev, [id]: true }));
+    try {
+      await api.delete(`/users/${id}`);
+      setUsers(prev => prev.filter(u => u.id !== id));
+      toast.success(`Usuario eliminado`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al eliminar');
+    } finally {
+      setDeletingUser(prev => ({ ...prev, [id]: false }));
+    }
+  };
+
+  const handleResetPassword = async (id) => {
+    const pass = resetPass[id];
+    if (!pass || pass.length < 4) { toast.error('Mínimo 4 caracteres'); return; }
+    try {
+      await api.put(`/users/${id}`, { password: pass });
+      setResetPass(prev => ({ ...prev, [id]: '' }));
+      toast.success('Contraseña actualizada');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error');
+    }
+  };
+
   const loadMatches = async () => {
     if (phase === 'positions') { setLoading(false); return; }
     if (phase === 'scoring') { setLoading(false); return; }
+    if (phase === 'users') { setLoading(false); return; }
     setLoading(true);
     try {
       const { data } = await api.get(`/matches?phase=${phase}`);
@@ -135,6 +193,7 @@ export default function Admin() {
 
   useEffect(() => {
     if (phase === 'scoring') loadScoringConfigs();
+    else if (phase === 'users') loadUsers();
     else loadMatches();
   }, [phase]);
 
@@ -413,13 +472,114 @@ export default function Admin() {
         </div>
       )}
 
-      {phase !== 'positions' && phase !== 'scoring' && loading ? (
+      {/* ── Usuarios ── */}
+      {phase === 'users' && (
+        <div className="space-y-4">
+          {/* Crear usuario */}
+          <div className="card">
+            <h3 className="font-bold text-wc-dark mb-1">➕ Crear Usuario</h3>
+            <p className="text-xs text-gray-400 mb-3">El usuario inicia sesión con su nombre de usuario y contraseña (sin email)</p>
+            <form onSubmit={handleCreateUser} className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-gray-600 block mb-1">Nombre (visible en ranking)</label>
+                <input
+                  type="text"
+                  placeholder="Ej: Juan García"
+                  value={newUser.name}
+                  onChange={e => setNewUser(f => ({ ...f, name: e.target.value }))}
+                  className="input-field text-sm py-2"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-600 block mb-1">Usuario (para iniciar sesión)</label>
+                <input
+                  type="text"
+                  placeholder="Ej: juangarcia"
+                  value={newUser.username}
+                  onChange={e => setNewUser(f => ({ ...f, username: e.target.value.toLowerCase().replace(/\s+/g,'_') }))}
+                  className="input-field text-sm py-2"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-600 block mb-1">Contraseña</label>
+                <input
+                  type="text"
+                  placeholder="Mínimo 4 caracteres"
+                  value={newUser.password}
+                  onChange={e => setNewUser(f => ({ ...f, password: e.target.value }))}
+                  className="input-field text-sm py-2"
+                  required
+                  minLength={4}
+                />
+              </div>
+              <button type="submit" disabled={creatingUser} className="btn-primary w-full flex items-center justify-center gap-2">
+                {creatingUser ? <Spinner size="sm" color="white" /> : '👤 Crear Usuario'}
+              </button>
+            </form>
+          </div>
+
+          {/* Lista de usuarios */}
+          <div className="card">
+            <h3 className="font-bold text-wc-dark mb-3">👥 Usuarios ({users.length})</h3>
+            {users.length === 0 ? (
+              <p className="text-center text-gray-400 text-sm py-4">No hay usuarios registrados</p>
+            ) : (
+              <div className="space-y-3">
+                {users.map(u => (
+                  <div key={u.id} className={`p-3 rounded-xl border ${u.role === 'admin' ? 'border-amber-200 bg-amber-50' : 'border-gray-100 bg-gray-50'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="font-bold text-wc-dark text-sm">{u.name}</p>
+                        <p className="text-xs text-gray-500">
+                          @{u.username || '—'}
+                          {u.email && <span className="ml-1 text-gray-400">· {u.email}</span>}
+                          {u.role === 'admin' && <span className="ml-1 text-amber-600 font-bold">· Admin</span>}
+                        </p>
+                      </div>
+                      {u.role !== 'admin' && (
+                        <button
+                          onClick={() => handleDeleteUser(u.id, u.name)}
+                          disabled={deletingUser[u.id]}
+                          className="text-xs text-red-500 hover:text-red-700 font-semibold px-2 py-1 rounded-lg hover:bg-red-50 transition-all"
+                        >
+                          {deletingUser[u.id] ? '...' : 'Eliminar'}
+                        </button>
+                      )}
+                    </div>
+                    {u.role !== 'admin' && (
+                      <div className="flex gap-2 mt-1">
+                        <input
+                          type="text"
+                          placeholder="Nueva contraseña"
+                          value={resetPass[u.id] || ''}
+                          onChange={e => setResetPass(p => ({ ...p, [u.id]: e.target.value }))}
+                          className="flex-1 text-xs rounded-lg border border-gray-200 py-1.5 px-2 focus:ring-1 focus:ring-wc-blue outline-none"
+                        />
+                        <button
+                          onClick={() => handleResetPassword(u.id)}
+                          className="text-xs bg-wc-blue text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-blue-700 transition-all"
+                        >
+                          Cambiar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {phase !== 'positions' && phase !== 'scoring' && phase !== 'users' && loading ? (
         <div className="flex justify-center py-12"><Spinner size="lg" /></div>
-      ) : phase !== 'positions' && phase !== 'scoring' && matches.length === 0 ? (
+      ) : phase !== 'positions' && phase !== 'scoring' && phase !== 'users' && matches.length === 0 ? (
         <div className="card text-center py-12 text-gray-400">
           <p>No hay partidos en esta fase</p>
         </div>
-      ) : phase !== 'positions' && phase !== 'scoring' ? (
+      ) : phase !== 'positions' && phase !== 'scoring' && phase !== 'users' ? (
         <div className="space-y-4">
           {matches.map(match => {
             const r = results[match.id] || {};
