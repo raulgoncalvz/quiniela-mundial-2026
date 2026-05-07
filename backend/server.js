@@ -5,11 +5,21 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
-// ── Seed en arranque (schema ya está en Supabase) ────────────────
+// ── Seed + fixes de datos en cada arranque ───────────────────────
 try {
   execSync('node prisma/seed.js', { stdio: 'inherit' });
 } catch (err) {
   console.error('⚠️  Error en seed:', err.message);
+}
+try {
+  execSync('node scripts/fix-dates.js', { stdio: 'inherit' });
+} catch (err) {
+  console.error('⚠️  Error en fix-dates:', err.message);
+}
+try {
+  execSync('node scripts/fix-home-away.js', { stdio: 'inherit' });
+} catch (err) {
+  console.error('⚠️  Error en fix-home-away:', err.message);
 }
 // ─────────────────────────────────────────────────────────────────
 
