@@ -2,6 +2,7 @@ const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
+const { calculateGroupStandings, calculatePredictedStandings, awardGroupPositionPoints } = require('../utils/groupScoring');
 
 const prisma = new PrismaClient();
 
@@ -113,13 +114,15 @@ router.put('/:id/result', auth, admin, async (req, res) => {
     return res.status(400).json({ error: 'homeScore y awayScore son requeridos' });
 
   const matchId = parseInt(req.params.id);
+  const finalStatus = status || 'finished';
+
   try {
     const match = await prisma.match.update({
       where: { id: matchId },
       data: {
         homeScore: parseInt(homeScore),
         awayScore: parseInt(awayScore),
-        status: status || 'finished',
+        status: finalStatus,
       },
       include: { homeTeam: true, awayTeam: true },
     });
@@ -139,7 +142,20 @@ router.put('/:id/result', auth, admin, async (req, res) => {
       await prisma.prediction.update({ where: { id: pred.id }, data: { points } });
     }
 
-    res.json({ match, updated: predictions.length });
+    // Auto-calculate group position points when all 6 matches of a group finish
+    let groupPointsUpdated = 0;
+    if (match.phase === 'groups' && match.group && finalStatus === 'finished') {
+      const groupMatches = await prisma.match.findMany({
+        where: { group: match.group, phase: 'groups' },
+        select: { status: true },
+      });
+      if (groupMatches.every(m => m.status === 'finished')) {
+        groupPointsUpdated = await awardGroupPositionPoints(match.group);
+        console.log(`✅ Grupo ${match.group} completo — posiciones calculadas (${groupPointsUpdated} usuarios)`);
+      }
+    }
+
+    res.json({ match, updated: predictions.length, groupPointsUpdated });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error del servidor' });
@@ -163,46 +179,6 @@ router.put('/:id/status', auth, admin, async (req, res) => {
   }
 });
 
-// Helper: calculates group standings from finished match results
-async function calculateGroupStandings(group) {
-  const teams = await prisma.team.findMany({ where: { group } });
-  const matches = await prisma.match.findMany({
-    where: { group, phase: 'groups', status: 'finished' },
-  });
-
-  const stats = {};
-  for (const team of teams) {
-    stats[team.id] = { team, mp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
-  }
-
-  for (const match of matches) {
-    if (match.homeScore === null || match.awayScore === null) continue;
-    const home = stats[match.homeTeamId];
-    const away = stats[match.awayTeamId];
-    if (!home || !away) continue;
-
-    home.mp++; away.mp++;
-    home.gf += match.homeScore; home.ga += match.awayScore;
-    away.gf += match.awayScore; away.ga += match.homeScore;
-
-    if (match.homeScore > match.awayScore) {
-      home.w++; home.pts += 3; away.l++;
-    } else if (match.homeScore < match.awayScore) {
-      away.w++; away.pts += 3; home.l++;
-    } else {
-      home.d++; home.pts++;
-      away.d++; away.pts++;
-    }
-  }
-
-  return Object.values(stats).sort((a, b) => {
-    if (b.pts !== a.pts) return b.pts - a.pts;
-    const gdDiff = (b.gf - b.ga) - (a.gf - a.ga);
-    if (gdDiff !== 0) return gdDiff;
-    if (b.gf !== a.gf) return b.gf - a.gf;
-    return a.team.name.localeCompare(b.team.name);
-  });
-}
 
 // GET /api/matches/groups/:group/standings — current auto-calculated standings
 router.get('/groups/:group/standings', async (req, res) => {
@@ -223,52 +199,7 @@ router.get('/groups/:group/standings', async (req, res) => {
   }
 });
 
-// Helper: calculate a user's predicted standings from their match predictions
-async function calculatePredictedStandings(group, userId) {
-  const teams = await prisma.team.findMany({ where: { group } });
-  const matches = await prisma.match.findMany({ where: { group, phase: 'groups' } });
-  const matchIds = matches.map(m => m.id);
-
-  const preds = await prisma.prediction.findMany({ where: { userId, matchId: { in: matchIds } } });
-  const predMap = {};
-  for (const p of preds) predMap[p.matchId] = p;
-
-  const stats = {};
-  for (const team of teams) {
-    stats[team.id] = { team, mp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
-  }
-
-  for (const match of matches) {
-    const pred = predMap[match.id];
-    if (!pred) continue;
-    const home = stats[match.homeTeamId];
-    const away = stats[match.awayTeamId];
-    if (!home || !away) continue;
-
-    home.mp++; away.mp++;
-    home.gf += pred.homeScore; home.ga += pred.awayScore;
-    away.gf += pred.awayScore; away.ga += pred.homeScore;
-
-    if (pred.homeScore > pred.awayScore) {
-      home.w++; home.pts += 3; away.l++;
-    } else if (pred.homeScore < pred.awayScore) {
-      away.w++; away.pts += 3; home.l++;
-    } else {
-      home.d++; home.pts++;
-      away.d++; away.pts++;
-    }
-  }
-
-  return Object.values(stats).sort((a, b) => {
-    if (b.pts !== a.pts) return b.pts - a.pts;
-    const gdDiff = (b.gf - b.ga) - (a.gf - a.ga);
-    if (gdDiff !== 0) return gdDiff;
-    if (b.gf !== a.gf) return b.gf - a.gf;
-    return a.team.name.localeCompare(b.team.name);
-  });
-}
-
-// POST /api/matches/groups/:group/standings — auto-calculates standings and awards points
+// POST /api/matches/groups/:group/standings — manually award group position points (admin)
 router.post('/groups/:group/standings', auth, admin, async (req, res) => {
   const group = req.params.group.toUpperCase();
   try {
@@ -283,26 +214,8 @@ router.post('/groups/:group/standings', auth, admin, async (req, res) => {
         finishedCount, totalMatches: 6,
       });
 
+    const updated = await awardGroupPositionPoints(group);
     const [rPos1, rPos2, rPos3, rPos4] = realStandings.map(s => s.team.name);
-
-    // For each user, calculate their predicted standings from match predictions
-    const users = await prisma.user.findMany({ where: { role: 'user' } });
-    let updated = 0;
-
-    for (const user of users) {
-      const predStandings = await calculatePredictedStandings(group, user.id);
-      const [pPos1, pPos2, pPos3, pPos4] = predStandings.map(s => s.team.name);
-
-      const points = (pPos1 === rPos1 ? 2 : 0) + (pPos2 === rPos2 ? 2 : 0)
-                   + (pPos3 === rPos3 ? 2 : 0) + (pPos4 === rPos4 ? 2 : 0);
-
-      await prisma.groupPrediction.upsert({
-        where: { userId_group: { userId: user.id, group } },
-        update: { pos1: pPos1 || '', pos2: pPos2 || '', pos3: pPos3 || '', pos4: pPos4 || '', points },
-        create: { userId: user.id, group, pos1: pPos1 || '', pos2: pPos2 || '', pos3: pPos3 || '', pos4: pPos4 || '', points },
-      });
-      updated++;
-    }
 
     res.json({
       group, pos1: rPos1, pos2: rPos2, pos3: rPos3, pos4: rPos4,

@@ -2,6 +2,7 @@ const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
+const { calculateGroupStandings, awardGroupPositionPoints } = require('../utils/groupScoring');
 
 const prisma = new PrismaClient();
 
@@ -104,13 +105,14 @@ router.put('/scoring', auth, admin, async (req, res) => {
   }
 });
 
-// POST /api/config/scoring/recalculate — recalculate all finished match predictions
+// POST /api/config/scoring/recalculate — recalculate all finished match predictions + group positions
 router.post('/scoring/recalculate', auth, admin, async (req, res) => {
   try {
     const scoringMap = {};
     const configs = await prisma.scoringConfig.findMany();
     for (const cfg of configs) scoringMap[cfg.phase] = cfg;
 
+    // 1. Recalculate match prediction points
     const matches = await prisma.match.findMany({
       where: { status: 'finished' },
       include: { predictions: true },
@@ -135,7 +137,23 @@ router.post('/scoring/recalculate', auth, admin, async (req, res) => {
       }
     }
 
-    res.json({ success: true, predictionsRecalculated: totalUpdated });
+    // 2. Recalculate group position points for every completed group
+    const groups = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+    let groupsRecalculated = 0;
+
+    for (const group of groups) {
+      const groupMatches = await prisma.match.findMany({
+        where: { group, phase: 'groups' },
+        select: { status: true },
+      });
+      if (groupMatches.length === 0 || !groupMatches.every(m => m.status === 'finished')) continue;
+      const realStandings = await calculateGroupStandings(group);
+      if (realStandings.length < 4) continue;
+      await awardGroupPositionPoints(group);
+      groupsRecalculated++;
+    }
+
+    res.json({ success: true, predictionsRecalculated: totalUpdated, groupsRecalculated });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error del servidor' });
