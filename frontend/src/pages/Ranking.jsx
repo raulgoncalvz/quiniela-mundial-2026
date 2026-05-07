@@ -166,10 +166,11 @@ export default function Ranking() {
                   <p className="text-xs text-gray-400">
                     {u.exactScores} exactos · {u.accuracy}% precisión
                   </p>
-                  {(u.groupPoints > 0 || u.championPoints > 0) && (
+                  {(u.groupPoints > 0 || u.championPoints > 0 || u.advancementPoints > 0) && (
                     <p className="text-xs text-gray-300">
                       {u.matchPoints}p partidos
                       {u.groupPoints > 0 ? ` · ${u.groupPoints}p grupos` : ''}
+                      {u.advancementPoints > 0 ? ` · ${u.advancementPoints}p avances` : ''}
                       {u.championPoints > 0 ? ` · ${u.championPoints}p especiales` : ''}
                     </p>
                   )}
@@ -220,6 +221,10 @@ export default function Ranking() {
           <div className="flex justify-between">
             <span>📊 Posición de grupo exacta</span>
             <span className="font-bold text-green-600">+2 pts</span>
+          </div>
+          <div className="flex justify-between">
+            <span>🚀 Equipo avanza a R16/QF/SF/Final</span>
+            <span className="font-bold text-purple-600">+3/3/4/5 pts</span>
           </div>
           <div className="flex justify-between">
             <span>✗ Resultado errado</span>
