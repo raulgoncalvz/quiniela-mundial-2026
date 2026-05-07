@@ -265,7 +265,9 @@ export default function Quiniela() {
                       <th className="text-center py-1.5 w-7">G</th>
                       <th className="text-center py-1.5 w-7">E</th>
                       <th className="text-center py-1.5 w-7">P</th>
-                      <th className="text-center py-1.5 w-8">GD</th>
+                      <th className="text-center py-1.5 w-7">GF</th>
+                      <th className="text-center py-1.5 w-7">GC</th>
+                      <th className="text-center py-1.5 w-8">DG</th>
                       <th className="text-center py-1.5 w-8 font-bold text-wc-dark">Pts</th>
                     </tr>
                   </thead>
@@ -282,6 +284,8 @@ export default function Quiniela() {
                         <td className="py-2 text-center text-gray-500">{s.w}</td>
                         <td className="py-2 text-center text-gray-500">{s.d}</td>
                         <td className="py-2 text-center text-gray-500">{s.l}</td>
+                        <td className="py-2 text-center text-gray-500">{s.gf}</td>
+                        <td className="py-2 text-center text-gray-500">{s.ga}</td>
                         <td className="py-2 text-center text-gray-500">{s.gd > 0 ? `+${s.gd}` : s.gd}</td>
                         <td className="py-2 text-center font-black text-wc-dark">{s.pts}</td>
                       </tr>
@@ -359,7 +363,9 @@ export default function Quiniela() {
                       <th className="text-center py-1.5 w-7">G</th>
                       <th className="text-center py-1.5 w-7">E</th>
                       <th className="text-center py-1.5 w-7">P</th>
-                      <th className="text-center py-1.5 w-8">GD</th>
+                      <th className="text-center py-1.5 w-7">GF</th>
+                      <th className="text-center py-1.5 w-7">GC</th>
+                      <th className="text-center py-1.5 w-8">DG</th>
                       <th className="text-center py-1.5 w-8 font-bold text-wc-dark">Pts</th>
                       {thirds.allGroupsComplete && (
                         <th className="text-center py-1.5">Rival R32</th>
@@ -368,7 +374,6 @@ export default function Quiniela() {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {thirds.thirds.map((t, idx) => {
-                      const qualifies = thirds.allGroupsComplete ? idx < 8 : idx < 8;
                       const rowBg = thirds.allGroupsComplete
                         ? (idx < 8 ? 'bg-green-50' : '')
                         : (idx < 8 ? 'bg-blue-50/40' : '');
@@ -390,6 +395,8 @@ export default function Quiniela() {
                           <td className="py-2 text-center text-gray-500">{t.w}</td>
                           <td className="py-2 text-center text-gray-500">{t.d}</td>
                           <td className="py-2 text-center text-gray-500">{t.l}</td>
+                          <td className="py-2 text-center text-gray-500">{t.gf}</td>
+                          <td className="py-2 text-center text-gray-500">{t.ga}</td>
                           <td className="py-2 text-center text-gray-500">{t.gd > 0 ? `+${t.gd}` : t.gd}</td>
                           <td className="py-2 text-center font-black text-wc-dark">{t.pts}</td>
                           {thirds.allGroupsComplete && (
