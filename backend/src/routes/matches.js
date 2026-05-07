@@ -13,12 +13,22 @@ function calculatePoints(actualHome, actualAway, predHome, predAway, exactScore 
   return actual === pred ? correctResult : 0;
 }
 
+const PHASE_DEFAULTS = {
+  groups:   { exactScore: 3,  correctResult: 1 },
+  round32:  { exactScore: 4,  correctResult: 2 },
+  round16:  { exactScore: 5,  correctResult: 2 },
+  quarters: { exactScore: 6,  correctResult: 3 },
+  semis:    { exactScore: 7,  correctResult: 3 },
+  third:    { exactScore: 6,  correctResult: 3 },
+  final:    { exactScore: 10, correctResult: 5 },
+};
+
 async function getScoringConfig(phase) {
   try {
     const cfg = await prisma.scoringConfig.findUnique({ where: { phase } });
-    return cfg || { exactScore: 3, correctResult: 1 };
+    return cfg || PHASE_DEFAULTS[phase] || { exactScore: 3, correctResult: 1 };
   } catch {
-    return { exactScore: 3, correctResult: 1 };
+    return PHASE_DEFAULTS[phase] || { exactScore: 3, correctResult: 1 };
   }
 }
 

@@ -26,6 +26,11 @@ try {
 } catch (err) {
   console.error('⚠️  Error en fix-labels:', err.message);
 }
+try {
+  execSync('node scripts/init-scoring.js', { stdio: 'inherit' });
+} catch (err) {
+  console.error('⚠️  Error en init-scoring:', err.message);
+}
 // ─────────────────────────────────────────────────────────────────
 
 const app = express();

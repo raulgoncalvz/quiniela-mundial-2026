@@ -516,18 +516,23 @@ router.post('/champion', auth, async (req, res) => {
   }
 });
 
+const KNOCKOUT_PHASES = ['round32', 'round16', 'quarters', 'semis', 'third', 'final'];
+const PHASE_LABELS_STATS = {
+  groups: 'Fase de Grupos', round32: 'Ronda de 32', round16: 'Octavos',
+  quarters: 'Cuartos', semis: 'Semifinales', third: '3er Lugar', final: 'Final',
+};
+
 // GET /api/predictions/stats — user stats
 router.get('/stats', auth, async (req, res) => {
   try {
     const predictions = await prisma.prediction.findMany({
       where: { userId: req.user.id },
-      include: { match: { select: { homeScore: true, awayScore: true, status: true } } },
+      include: { match: { select: { phase: true, homeScore: true, awayScore: true, status: true } } },
     });
 
     const total = predictions.length;
     const finished = predictions.filter(p => p.match.status === 'finished');
 
-    // Exact = predicted scores match actual scores (works regardless of scoring config)
     const exact = finished.filter(p =>
       p.match.homeScore !== null &&
       p.homeScore === p.match.homeScore &&
@@ -535,6 +540,30 @@ router.get('/stats', auth, async (req, res) => {
     ).length;
     const correct = finished.filter(p => p.points >= 1).length;
     const matchPoints = finished.reduce((sum, p) => sum + p.points, 0);
+
+    // Per-phase breakdown
+    const phaseBreakdown = {};
+    for (const p of finished) {
+      const ph = p.match.phase;
+      if (!phaseBreakdown[ph]) phaseBreakdown[ph] = { points: 0, correct: 0, exact: 0, played: 0, label: PHASE_LABELS_STATS[ph] || ph };
+      phaseBreakdown[ph].played++;
+      phaseBreakdown[ph].points += p.points;
+      if (p.points > 0) phaseBreakdown[ph].correct++;
+      if (p.match.homeScore !== null && p.homeScore === p.match.homeScore && p.awayScore === p.match.awayScore)
+        phaseBreakdown[ph].exact++;
+    }
+
+    // Knockout advancement: correct winner predictions per round
+    const knockoutAdv = {};
+    for (const ph of KNOCKOUT_PHASES) {
+      const phPreds = finished.filter(p => p.match.phase === ph);
+      knockoutAdv[ph] = {
+        label: PHASE_LABELS_STATS[ph] || ph,
+        correct: phPreds.filter(p => p.points > 0).length,
+        total: phPreds.length,
+        points: phPreds.reduce((s, p) => s + p.points, 0),
+      };
+    }
 
     const [championPred, groupPredictions] = await Promise.all([
       prisma.championPrediction.findUnique({ where: { userId: req.user.id } }),
@@ -554,6 +583,8 @@ router.get('/stats', auth, async (req, res) => {
       championPoints: champPoints,
       groupPoints,
       totalPoints: matchPoints + champPoints + groupPoints,
+      phaseBreakdown,
+      knockoutAdv,
     });
   } catch (err) {
     res.status(500).json({ error: 'Error del servidor' });

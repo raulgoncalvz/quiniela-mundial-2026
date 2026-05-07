@@ -105,10 +105,20 @@ router.put('/scoring', auth, admin, async (req, res) => {
   }
 });
 
+const PHASE_DEFAULTS = {
+  groups:   { exactScore: 3,  correctResult: 1 },
+  round32:  { exactScore: 4,  correctResult: 2 },
+  round16:  { exactScore: 5,  correctResult: 2 },
+  quarters: { exactScore: 6,  correctResult: 3 },
+  semis:    { exactScore: 7,  correctResult: 3 },
+  third:    { exactScore: 6,  correctResult: 3 },
+  final:    { exactScore: 10, correctResult: 5 },
+};
+
 // POST /api/config/scoring/recalculate — recalculate all finished match predictions + group positions
 router.post('/scoring/recalculate', auth, admin, async (req, res) => {
   try {
-    const scoringMap = {};
+    const scoringMap = { ...PHASE_DEFAULTS };
     const configs = await prisma.scoringConfig.findMany();
     for (const cfg of configs) scoringMap[cfg.phase] = cfg;
 

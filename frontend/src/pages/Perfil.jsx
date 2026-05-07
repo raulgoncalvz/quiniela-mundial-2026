@@ -121,10 +121,25 @@ export default function Perfil() {
         <div className="card mb-4">
           <h3 className="font-bold text-sm text-wc-dark mb-3">📊 Desglose de Puntos</h3>
           <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Puntos por partidos</span>
-              <span className="font-bold text-wc-blue">{stats.matchPoints} pts</span>
-            </div>
+            {/* Match points by phase */}
+            {stats.phaseBreakdown && Object.entries(stats.phaseBreakdown).map(([ph, d]) => (
+              <div key={ph} className="flex justify-between text-sm">
+                <span className="text-gray-500">{d.label}</span>
+                <span className="font-bold text-wc-blue">{d.points} pts</span>
+              </div>
+            ))}
+            {!stats.phaseBreakdown && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Partidos</span>
+                <span className="font-bold text-wc-blue">{stats.matchPoints} pts</span>
+              </div>
+            )}
+            {stats.groupPoints > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Posiciones de grupo</span>
+                <span className="font-bold text-green-600">{stats.groupPoints} pts</span>
+              </div>
+            )}
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Apuestas especiales</span>
               <span className="font-bold text-amber-600">{stats.championPoints} pts</span>
@@ -134,6 +149,26 @@ export default function Perfil() {
               <span className="text-wc-dark">{stats.totalPoints} pts</span>
             </div>
           </div>
+
+          {/* Knockout advancement summary */}
+          {stats.knockoutAdv && Object.values(stats.knockoutAdv).some(d => d.total > 0) && (
+            <div className="mt-3 pt-3 border-t">
+              <p className="text-xs font-bold text-gray-600 mb-2">⚡ Avances en eliminatorias</p>
+              <div className="space-y-1.5">
+                {Object.entries(stats.knockoutAdv)
+                  .filter(([, d]) => d.total > 0)
+                  .map(([ph, d]) => (
+                    <div key={ph} className="flex items-center justify-between text-xs">
+                      <span className="text-gray-500">{d.label}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-400">{d.correct}/{d.total} correctos</span>
+                        <span className="font-bold text-wc-blue">{d.points} pts</span>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
