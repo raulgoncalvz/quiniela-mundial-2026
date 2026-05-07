@@ -165,7 +165,32 @@ router.put('/:id/result', auth, admin, async (req, res) => {
       }
     }
 
-    res.json({ match, updated: predictions.length, groupPointsUpdated });
+    // Award advancement points for knockout winners
+    const NEXT_ROUND_MAP = { round32: 'round16', round16: 'quarters', quarters: 'semis', semis: 'final' };
+    const ADV_BET_PHASE = { round16: 'bet_round16', quarters: 'bet_quarters', semis: 'bet_semis', final: 'bet_final' };
+    let advancementUpdated = 0;
+
+    if (NEXT_ROUND_MAP[match.phase] && finalStatus === 'finished') {
+      const hScore = parseInt(homeScore);
+      const aScore = parseInt(awayScore);
+      const winnerTeam = hScore >= aScore ? match.homeTeam : match.awayTeam;
+
+      if (winnerTeam) {
+        const nextRound = NEXT_ROUND_MAP[match.phase];
+        const advCfg = await getScoringConfig(ADV_BET_PHASE[nextRound]);
+        const advPreds = await prisma.advancementPrediction.findMany({
+          where: { round: nextRound, teamName: winnerTeam.name },
+        });
+        for (const pred of advPreds) {
+          await prisma.advancementPrediction.update({ where: { id: pred.id }, data: { points: advCfg.correctResult } });
+        }
+        advancementUpdated = advPreds.length;
+        if (advPreds.length > 0)
+          console.log(`🚀 ${winnerTeam.name} → ${nextRound}: ${advPreds.length} usuarios premiados (${advCfg.correctResult}pts)`);
+      }
+    }
+
+    res.json({ match, updated: predictions.length, groupPointsUpdated, advancementUpdated });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error del servidor' });

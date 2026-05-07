@@ -19,6 +19,7 @@ router.get('/', async (req, res) => {
         },
         championPrediction: { select: { points: true } },
         groupPredictions: { select: { points: true } },
+        advancementPredictions: { select: { points: true } },
       },
     });
 
@@ -28,6 +29,7 @@ router.get('/', async (req, res) => {
         const matchPoints = finishedPreds.reduce((sum, p) => sum + p.points, 0);
         const champPoints = user.championPrediction?.points || 0;
         const groupPoints = user.groupPredictions.reduce((sum, p) => sum + p.points, 0);
+        const advPoints = user.advancementPredictions.reduce((sum, p) => sum + p.points, 0);
 
         // Compare scores directly — works with any scoring config
         const exactScores = finishedPreds.filter(p =>
@@ -41,10 +43,11 @@ router.get('/', async (req, res) => {
           id: user.id,
           name: user.name,
           role: user.role,
-          totalPoints: matchPoints + champPoints + groupPoints,
+          totalPoints: matchPoints + champPoints + groupPoints + advPoints,
           matchPoints,
           championPoints: champPoints,
           groupPoints,
+          advancementPoints: advPoints,
           totalPredictions: user.predictions.length,
           exactScores,
           correctResults,

@@ -5,6 +5,19 @@ const THIRD_PLACE_COMBINATIONS = require('../combinaciones.json');
 
 const prisma = new PrismaClient();
 
+const ROUND_LIMITS = { round16: 16, quarters: 8, semis: 4, final: 2 };
+
+async function isLocked() {
+  try {
+    const firstMatch = await prisma.match.findFirst({ orderBy: { date: 'asc' } });
+    if (!firstMatch) return false;
+    const lockTime = new Date(firstMatch.date.getTime() - 60 * 60 * 1000);
+    return new Date() >= lockTime;
+  } catch {
+    return false;
+  }
+}
+
 // GET /api/predictions — all user predictions
 router.get('/', auth, async (req, res) => {
   try {
@@ -21,6 +34,18 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
+// GET /api/predictions/lock
+router.get('/lock', async (req, res) => {
+  try {
+    const firstMatch = await prisma.match.findFirst({ orderBy: { date: 'asc' } });
+    if (!firstMatch) return res.json({ locked: false, lockTime: null });
+    const lockTime = new Date(firstMatch.date.getTime() - 60 * 60 * 1000);
+    res.json({ locked: new Date() >= lockTime, lockTime });
+  } catch {
+    res.json({ locked: false, lockTime: null });
+  }
+});
+
 // POST /api/predictions — save or update prediction
 router.post('/', auth, async (req, res) => {
   const { matchId, homeScore, awayScore } = req.body;
@@ -29,6 +54,9 @@ router.post('/', auth, async (req, res) => {
 
   if (homeScore < 0 || awayScore < 0 || homeScore > 20 || awayScore > 20)
     return res.status(400).json({ error: 'Puntuación inválida' });
+
+  if (await isLocked())
+    return res.status(423).json({ error: 'Las predicciones están bloqueadas. El torneo ya comenzó.' });
 
   try {
     const match = await prisma.match.findUnique({ where: { id: parseInt(matchId) } });
@@ -59,6 +87,9 @@ router.post('/batch', auth, async (req, res) => {
   const { predictions } = req.body;
   if (!Array.isArray(predictions) || predictions.length === 0)
     return res.status(400).json({ error: 'Se requiere un array de predicciones' });
+
+  if (await isLocked())
+    return res.status(423).json({ error: 'Las predicciones están bloqueadas. El torneo ya comenzó.' });
 
   try {
     const results = [];
@@ -460,6 +491,9 @@ router.post('/groups/:group', auth, async (req, res) => {
   if (!['A','B','C','D','E','F','G','H','I','J','K','L'].includes(group))
     return res.status(400).json({ error: 'Grupo inválido' });
 
+  if (await isLocked())
+    return res.status(423).json({ error: 'Las predicciones están bloqueadas. El torneo ya comenzó.' });
+
   try {
     const started = await prisma.match.findFirst({
       where: { group, phase: 'groups', status: { not: 'pending' } },
@@ -493,6 +527,9 @@ router.get('/champion', auth, async (req, res) => {
 router.post('/champion', auth, async (req, res) => {
   const { champion, runnerUp, third, topScorer, bestPlayer, bestGoalkeeper } = req.body;
 
+  if (await isLocked())
+    return res.status(423).json({ error: 'Las predicciones están bloqueadas. El torneo ya comenzó.' });
+
   try {
     const data = {
       champion:       champion       || '',
@@ -510,6 +547,53 @@ router.post('/champion', auth, async (req, res) => {
     });
 
     res.json(pred);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
+// GET /api/predictions/advancement
+router.get('/advancement', auth, async (req, res) => {
+  try {
+    const preds = await prisma.advancementPrediction.findMany({
+      where: { userId: req.user.id },
+      orderBy: [{ round: 'asc' }, { teamName: 'asc' }],
+    });
+    const result = { round16: [], quarters: [], semis: [], final: [] };
+    for (const p of preds) {
+      if (result[p.round]) result[p.round].push({ teamName: p.teamName, points: p.points });
+    }
+    res.json(result);
+  } catch {
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
+// POST /api/predictions/advancement
+router.post('/advancement', auth, async (req, res) => {
+  const { round, teams } = req.body;
+  if (!ROUND_LIMITS[round]) return res.status(400).json({ error: 'Ronda inválida' });
+  if (!Array.isArray(teams)) return res.status(400).json({ error: 'teams debe ser un array' });
+  if (teams.length > ROUND_LIMITS[round])
+    return res.status(400).json({ error: `Máximo ${ROUND_LIMITS[round]} equipos para esta ronda` });
+
+  if (await isLocked())
+    return res.status(423).json({ error: 'Las predicciones están bloqueadas. El torneo ya comenzó.' });
+
+  try {
+    await prisma.advancementPrediction.deleteMany({ where: { userId: req.user.id, round } });
+    if (teams.length > 0) {
+      await prisma.advancementPrediction.createMany({
+        data: teams.filter(t => t?.trim()).map(t => ({
+          userId: req.user.id, round, teamName: t.trim(),
+        })),
+      });
+    }
+    const saved = await prisma.advancementPrediction.findMany({
+      where: { userId: req.user.id, round },
+    });
+    res.json(saved);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error del servidor' });
@@ -565,13 +649,23 @@ router.get('/stats', auth, async (req, res) => {
       };
     }
 
-    const [championPred, groupPredictions] = await Promise.all([
+    const [championPred, groupPredictions, advancementPredictions] = await Promise.all([
       prisma.championPrediction.findUnique({ where: { userId: req.user.id } }),
       prisma.groupPrediction.findMany({ where: { userId: req.user.id } }),
+      prisma.advancementPrediction.findMany({ where: { userId: req.user.id } }),
     ]);
 
     const champPoints = championPred?.points || 0;
     const groupPoints = groupPredictions.reduce((sum, p) => sum + p.points, 0);
+    const advPoints = advancementPredictions.reduce((sum, p) => sum + p.points, 0);
+
+    const advBreakdown = { round16: {}, quarters: {}, semis: {}, final: {} };
+    for (const p of advancementPredictions) {
+      if (!advBreakdown[p.round]) continue;
+      if (!advBreakdown[p.round].total) advBreakdown[p.round] = { total: 0, correct: 0, points: 0 };
+      advBreakdown[p.round].total++;
+      if (p.points > 0) { advBreakdown[p.round].correct++; advBreakdown[p.round].points += p.points; }
+    }
 
     res.json({
       totalPredictions: total,
@@ -582,9 +676,11 @@ router.get('/stats', auth, async (req, res) => {
       matchPoints,
       championPoints: champPoints,
       groupPoints,
-      totalPoints: matchPoints + champPoints + groupPoints,
+      advancementPoints: advPoints,
+      totalPoints: matchPoints + champPoints + groupPoints + advPoints,
       phaseBreakdown,
       knockoutAdv,
+      advBreakdown,
     });
   } catch (err) {
     res.status(500).json({ error: 'Error del servidor' });

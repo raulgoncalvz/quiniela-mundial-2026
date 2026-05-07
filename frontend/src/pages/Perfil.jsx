@@ -140,6 +140,12 @@ export default function Perfil() {
                 <span className="font-bold text-green-600">{stats.groupPoints} pts</span>
               </div>
             )}
+            {stats.advancementPoints > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">🚀 Avances eliminatorias</span>
+                <span className="font-bold text-purple-600">{stats.advancementPoints} pts</span>
+              </div>
+            )}
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Apuestas especiales</span>
               <span className="font-bold text-amber-600">{stats.championPoints} pts</span>

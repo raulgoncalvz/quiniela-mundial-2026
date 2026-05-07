@@ -16,6 +16,10 @@ const DEFAULT_CONFIGS = [
   { phase: 'bet_topScorer',  label: 'Bota de Oro',          exactScore: 5,  correctResult: 0 },
   { phase: 'bet_bestPlayer', label: 'Balón de Oro',         exactScore: 5,  correctResult: 0 },
   { phase: 'bet_goalkeeper', label: 'Mejor Portero',        exactScore: 5,  correctResult: 0 },
+  { phase: 'bet_round16',    label: 'Avance a Octavos',     exactScore: 0,  correctResult: 3 },
+  { phase: 'bet_quarters',   label: 'Avance a Cuartos',     exactScore: 0,  correctResult: 3 },
+  { phase: 'bet_semis',      label: 'Avance a Semis',       exactScore: 0,  correctResult: 4 },
+  { phase: 'bet_final',      label: 'Avance a Final',       exactScore: 0,  correctResult: 5 },
 ];
 
 async function main() {

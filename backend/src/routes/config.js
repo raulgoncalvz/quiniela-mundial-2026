@@ -7,19 +7,23 @@ const { calculateGroupStandings, awardGroupPositionPoints } = require('../utils/
 const prisma = new PrismaClient();
 
 const DEFAULT_CONFIGS = [
-  { phase: 'groups',         label: 'Fase de Grupos',    exactScore: 3,  correctResult: 1 },
-  { phase: 'round32',        label: 'Ronda de 32',        exactScore: 4,  correctResult: 2 },
-  { phase: 'round16',        label: 'Octavos de Final',   exactScore: 5,  correctResult: 2 },
-  { phase: 'quarters',       label: 'Cuartos de Final',   exactScore: 6,  correctResult: 3 },
-  { phase: 'semis',          label: 'Semifinales',         exactScore: 7,  correctResult: 3 },
-  { phase: 'third',          label: 'Tercer Lugar',        exactScore: 6,  correctResult: 3 },
-  { phase: 'final',          label: 'Final',               exactScore: 10, correctResult: 5 },
-  { phase: 'bet_champion',   label: '🏆 Campeón',          exactScore: 15, correctResult: 0 },
-  { phase: 'bet_runnerUp',   label: '🥈 Finalista',        exactScore: 10, correctResult: 0 },
-  { phase: 'bet_third',      label: '🥉 3er Lugar Apuesta', exactScore: 5,  correctResult: 0 },
-  { phase: 'bet_topScorer',  label: '⚽ Bota de Oro',      exactScore: 5,  correctResult: 0 },
-  { phase: 'bet_bestPlayer', label: '🌟 Balón de Oro',     exactScore: 5,  correctResult: 0 },
-  { phase: 'bet_goalkeeper', label: '🧤 Mejor Portero',    exactScore: 5,  correctResult: 0 },
+  { phase: 'groups',         label: 'Fase de Grupos',      exactScore: 3,  correctResult: 1 },
+  { phase: 'round32',        label: 'Ronda de 32',          exactScore: 4,  correctResult: 2 },
+  { phase: 'round16',        label: 'Octavos de Final',     exactScore: 5,  correctResult: 2 },
+  { phase: 'quarters',       label: 'Cuartos de Final',     exactScore: 6,  correctResult: 3 },
+  { phase: 'semis',          label: 'Semifinales',           exactScore: 7,  correctResult: 3 },
+  { phase: 'third',          label: 'Tercer Lugar',          exactScore: 6,  correctResult: 3 },
+  { phase: 'final',          label: 'Final',                 exactScore: 10, correctResult: 5 },
+  { phase: 'bet_champion',   label: '🏆 Campeón',            exactScore: 15, correctResult: 0 },
+  { phase: 'bet_runnerUp',   label: '🥈 Finalista',          exactScore: 10, correctResult: 0 },
+  { phase: 'bet_third',      label: '🥉 3er Lugar Apuesta',  exactScore: 5,  correctResult: 0 },
+  { phase: 'bet_topScorer',  label: '⚽ Bota de Oro',        exactScore: 5,  correctResult: 0 },
+  { phase: 'bet_bestPlayer', label: '🌟 Balón de Oro',       exactScore: 5,  correctResult: 0 },
+  { phase: 'bet_goalkeeper', label: '🧤 Mejor Portero',      exactScore: 5,  correctResult: 0 },
+  { phase: 'bet_round16',    label: '🚀 Avance a Octavos',   exactScore: 0,  correctResult: 3 },
+  { phase: 'bet_quarters',   label: '🚀 Avance a Cuartos',   exactScore: 0,  correctResult: 3 },
+  { phase: 'bet_semis',      label: '🚀 Avance a Semis',     exactScore: 0,  correctResult: 4 },
+  { phase: 'bet_final',      label: '🚀 Avance a Final',     exactScore: 0,  correctResult: 5 },
 ];
 
 // GET /api/config/scoring/current — public, returns active phase scoring
@@ -113,6 +117,23 @@ const PHASE_DEFAULTS = {
   semis:    { exactScore: 7,  correctResult: 3 },
   third:    { exactScore: 6,  correctResult: 3 },
   final:    { exactScore: 10, correctResult: 5 },
+  bet_round16:  { exactScore: 0, correctResult: 3 },
+  bet_quarters: { exactScore: 0, correctResult: 3 },
+  bet_semis:    { exactScore: 0, correctResult: 4 },
+  bet_final:    { exactScore: 0, correctResult: 5 },
+};
+
+const NEXT_ROUND_MAP = {
+  round32: 'round16',
+  round16: 'quarters',
+  quarters: 'semis',
+  semis: 'final',
+};
+const ADV_BET_PHASE = {
+  round16: 'bet_round16',
+  quarters: 'bet_quarters',
+  semis: 'bet_semis',
+  final: 'bet_final',
 };
 
 // POST /api/config/scoring/recalculate — recalculate all finished match predictions + group positions
@@ -163,7 +184,38 @@ router.post('/scoring/recalculate', auth, admin, async (req, res) => {
       groupsRecalculated++;
     }
 
-    res.json({ success: true, predictionsRecalculated: totalUpdated, groupsRecalculated });
+    // 3. Recalculate advancement points
+    await prisma.advancementPrediction.updateMany({ data: { points: 0 } });
+    let advancementUpdated = 0;
+
+    const knockoutFinished = await prisma.match.findMany({
+      where: { status: 'finished', phase: { in: ['round32', 'round16', 'quarters', 'semis'] } },
+      include: { homeTeam: true, awayTeam: true },
+    });
+
+    for (const m of knockoutFinished) {
+      if (m.homeScore === null || m.awayScore === null) continue;
+      const winnerTeam = m.homeScore >= m.awayScore ? m.homeTeam : m.awayTeam;
+      if (!winnerTeam) continue;
+
+      const nextRound = NEXT_ROUND_MAP[m.phase];
+      const betPhase = ADV_BET_PHASE[nextRound];
+      const advCfg = scoringMap[betPhase] || { correctResult: 0 };
+      if (!advCfg.correctResult) continue;
+
+      const advPreds = await prisma.advancementPrediction.findMany({
+        where: { round: nextRound, teamName: winnerTeam.name },
+      });
+      for (const pred of advPreds) {
+        await prisma.advancementPrediction.update({
+          where: { id: pred.id },
+          data: { points: advCfg.correctResult },
+        });
+        advancementUpdated++;
+      }
+    }
+
+    res.json({ success: true, predictionsRecalculated: totalUpdated, groupsRecalculated, advancementUpdated });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error del servidor' });

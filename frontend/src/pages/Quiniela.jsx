@@ -9,12 +9,20 @@ const KNOCKOUT_PHASES = ['round32','round16','quarters','semis','third','final']
 const PHASES = [
   { key: 'groups',    label: 'Grupos',     icon: '⚽' },
   { key: 'positions', label: 'Posiciones', icon: '📊' },
+  { key: 'advances',  label: 'Avances',    icon: '🚀' },
   { key: 'round32',   label: 'Ronda 32',   icon: '🔵' },
   { key: 'round16',   label: 'Octavos',    icon: '⚡' },
   { key: 'quarters',  label: 'Cuartos',    icon: '🔥' },
   { key: 'semis',     label: 'Semis',      icon: '💥' },
   { key: 'third',     label: '3er Lugar',  icon: '🥉' },
   { key: 'final',     label: 'Final',      icon: '🏆' },
+];
+
+const ADV_ROUNDS = [
+  { key: 'round16',  label: 'Octavos de Final',  max: 16, pts: 3, icon: '⚡' },
+  { key: 'quarters', label: 'Cuartos de Final',  max: 8,  pts: 3, icon: '🔥' },
+  { key: 'semis',    label: 'Semifinales',        max: 4,  pts: 4, icon: '💥' },
+  { key: 'final',    label: 'Final',              max: 2,  pts: 5, icon: '🏆' },
 ];
 
 const GROUP_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L'];
@@ -43,6 +51,25 @@ export default function Quiniela() {
   const [bracketTeams, setBracketTeams] = useState({});
   const [thirds, setThirds] = useState(null);
   const [thirdsLoading, setThirdsLoading] = useState(false);
+  const [advances, setAdvances] = useState({ round16: [], quarters: [], semis: [], final: [] });
+  const [advLoading, setAdvLoading] = useState(false);
+  const [savingAdv, setSavingAdv] = useState(null);
+  const [lockInfo, setLockInfo] = useState(null);
+
+  // Fetch lock status on mount
+  useEffect(() => {
+    api.get('/predictions/lock').then(({ data }) => setLockInfo(data)).catch(() => {});
+  }, []);
+
+  // Load advancement predictions when switching to advances tab
+  useEffect(() => {
+    if (activePhase !== 'advances') return;
+    setAdvLoading(true);
+    api.get('/predictions/advancement')
+      .then(({ data }) => setAdvances(data))
+      .catch(() => toast.error('Error al cargar avances'))
+      .finally(() => setAdvLoading(false));
+  }, [activePhase]);
 
   useEffect(() => {
     if (activePhase !== 'positions') return;
@@ -69,8 +96,31 @@ export default function Quiniela() {
       .finally(() => setThirdsLoading(false));
   }, [activePhase]);
 
+  const toggleTeam = (round, team, max) => {
+    setAdvances(prev => {
+      const current = prev[round] || [];
+      if (current.includes(team)) return { ...prev, [round]: current.filter(t => t !== team) };
+      if (current.length >= max) return prev;
+      return { ...prev, [round]: [...current, team] };
+    });
+  };
+
+  const saveAdvancement = async (round) => {
+    setSavingAdv(round);
+    try {
+      await api.post('/predictions/advancement', { round, teams: advances[round] || [] });
+      toast.success('¡Avances guardados!');
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Error al guardar';
+      toast.error(msg);
+      if (err.response?.status === 423) setLockInfo(prev => ({ ...prev, locked: true }));
+    } finally {
+      setSavingAdv(null);
+    }
+  };
+
   const loadData = useCallback(async () => {
-    if (activePhase === 'positions') return;
+    if (activePhase === 'positions' || activePhase === 'advances') return;
     setLoading(true);
     try {
       const params = new URLSearchParams({ phase: activePhase });
@@ -157,6 +207,13 @@ export default function Quiniela() {
         <h1 className="text-2xl font-black text-wc-dark">⚽ Mi Quiniela</h1>
         <p className="text-sm text-gray-500">Predice los marcadores antes de cada partido</p>
       </div>
+
+      {/* Lock banner */}
+      {lockInfo?.locked && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold text-center">
+          🔒 Las predicciones están bloqueadas — el torneo ya comenzó
+        </div>
+      )}
 
       {/* Phase tabs */}
       <div className="flex gap-2 overflow-x-auto pb-2 mb-4 -mx-4 px-4 scrollbar-hide">
@@ -425,8 +482,73 @@ export default function Quiniela() {
         </div>
       )}
 
-      {/* ── Partidos (todas las fases excepto posiciones) ── */}
-      {activePhase !== 'positions' && (
+      {/* ── Avances eliminatorias ── */}
+      {activePhase === 'advances' && (
+        <div className="space-y-5">
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800">
+            <p className="font-bold mb-0.5">🚀 Predicciones de Avance</p>
+            <p className="text-blue-600">Predice qué equipos llegan a cada ronda. Se bloquean 1 hora antes del primer partido.</p>
+          </div>
+
+          {advLoading ? (
+            <div className="flex justify-center py-12"><Spinner size="lg" /></div>
+          ) : (
+            ADV_ROUNDS.map(({ key, label, max, pts, icon }) => {
+              const selected = advances[key] || [];
+              const isFull = selected.length >= max;
+              return (
+                <div key={key} className="card">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="font-bold text-wc-dark">{icon} {label}</h3>
+                      <p className="text-xs text-gray-400">{pts} pts por equipo · Elige {max} equipos</p>
+                    </div>
+                    <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
+                      isFull ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                    }`}>
+                      {selected.length}/{max}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 mb-4">
+                    {TEAMS_LIST.map(team => {
+                      const isSelected = selected.includes(team);
+                      const atMax = isFull && !isSelected;
+                      return (
+                        <button
+                          key={team}
+                          disabled={atMax || lockInfo?.locked}
+                          onClick={() => toggleTeam(key, team, max)}
+                          className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition-all ${
+                            isSelected
+                              ? 'bg-wc-blue text-white shadow-sm'
+                              : atMax || lockInfo?.locked
+                              ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95'
+                          }`}
+                        >
+                          {team}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    onClick={() => saveAdvancement(key)}
+                    disabled={savingAdv === key || lockInfo?.locked}
+                    className="btn-primary w-full text-sm flex items-center justify-center gap-2"
+                  >
+                    {savingAdv === key ? <Spinner size="sm" color="white" /> : `💾 Guardar ${label}`}
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* ── Partidos (todas las fases excepto posiciones y avances) ── */}
+      {activePhase !== 'positions' && activePhase !== 'advances' && (
         <>
           {loading ? (
             <div className="flex justify-center py-12"><Spinner size="lg" /></div>

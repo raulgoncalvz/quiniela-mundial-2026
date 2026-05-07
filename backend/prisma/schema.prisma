@@ -8,16 +8,17 @@ datasource db {
 }
 
 model User {
-  id                 Int                  @id @default(autoincrement())
-  name               String
-  username           String?              @unique
-  email              String?              @unique
-  password           String
-  role               String               @default("user")
-  createdAt          DateTime             @default(now())
-  predictions        Prediction[]
-  championPrediction ChampionPrediction?
-  groupPredictions   GroupPrediction[]
+  id                     Int                     @id @default(autoincrement())
+  name                   String
+  username               String?                 @unique
+  email                  String?                 @unique
+  password               String
+  role                   String                  @default("user")
+  createdAt              DateTime                @default(now())
+  predictions            Prediction[]
+  championPrediction     ChampionPrediction?
+  groupPredictions       GroupPrediction[]
+  advancementPredictions AdvancementPrediction[]
 }
 
 model GroupPrediction {
@@ -95,4 +96,15 @@ model ChampionPrediction {
   bestGoalkeeper String @default("")
   points         Int    @default(0)
   user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AdvancementPrediction {
+  id       Int    @id @default(autoincrement())
+  userId   Int
+  round    String
+  teamName String
+  points   Int    @default(0)
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, round, teamName])
 }
