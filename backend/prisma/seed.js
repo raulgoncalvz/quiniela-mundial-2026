@@ -126,49 +126,49 @@ function getGroupDates(groupIndex) {
 // Partidos fase eliminatoria (placeholder)
 // =============================================
 const KNOCKOUT_MATCHES = [
-  // Ronda de 32 — fechas y orden oficial FIFA 2026 (del Excel)
-  { matchNumber: 73,  phase: 'round32', label: '2A vs 2B',  date: '2026-06-28T21:00:00Z', city: 'Dallas',           venue: 'AT&T Stadium' },
-  { matchNumber: 76,  phase: 'round32', label: '1C vs 2F',  date: '2026-06-29T19:00:00Z', city: 'Miami',            venue: 'Hard Rock Stadium' },
-  { matchNumber: 74,  phase: 'round32', label: '1E vs 3er', date: '2026-06-29T22:30:00Z', city: 'Nueva York',       venue: 'MetLife Stadium' },
-  { matchNumber: 75,  phase: 'round32', label: '1F vs 2C',  date: '2026-06-30T03:00:00Z', city: 'Los Ángeles',      venue: 'SoFi Stadium' },
-  { matchNumber: 78,  phase: 'round32', label: '2E vs 2I',  date: '2026-06-30T19:00:00Z', city: 'Seattle',          venue: 'Lumen Field' },
-  { matchNumber: 77,  phase: 'round32', label: '1I vs 3er', date: '2026-06-30T23:00:00Z', city: 'Boston',           venue: 'Gillette Stadium' },
-  { matchNumber: 79,  phase: 'round32', label: '1A vs 3er', date: '2026-07-01T03:00:00Z', city: 'Toronto',          venue: 'BMO Field' },
-  { matchNumber: 80,  phase: 'round32', label: '1L vs 3er', date: '2026-07-01T18:00:00Z', city: 'Chicago',          venue: 'Soldier Field' },
-  { matchNumber: 82,  phase: 'round32', label: '1G vs 3er', date: '2026-07-01T22:00:00Z', city: 'Guadalajara',      venue: 'Estadio Akron' },
-  { matchNumber: 81,  phase: 'round32', label: '1D vs 3er', date: '2026-07-02T02:00:00Z', city: 'San Francisco',    venue: 'Levi\'s Stadium' },
-  { matchNumber: 84,  phase: 'round32', label: '1H vs 2J',  date: '2026-07-02T21:00:00Z', city: 'Vancouver',        venue: 'BC Place' },
-  { matchNumber: 83,  phase: 'round32', label: '2K vs 2L',  date: '2026-07-03T01:00:00Z', city: 'Nueva York',       venue: 'MetLife Stadium' },
-  { matchNumber: 85,  phase: 'round32', label: '1B vs 3er', date: '2026-07-03T05:00:00Z', city: 'Dallas',           venue: 'AT&T Stadium' },
-  { matchNumber: 88,  phase: 'round32', label: '2D vs 2G',  date: '2026-07-03T20:00:00Z', city: 'Ciudad de México', venue: 'Estadio Azteca' },
-  { matchNumber: 86,  phase: 'round32', label: '1J vs 2H',  date: '2026-07-04T00:00:00Z', city: 'Los Ángeles',      venue: 'SoFi Stadium' },
-  { matchNumber: 87,  phase: 'round32', label: '1K vs 3er', date: '2026-07-04T03:30:00Z', city: 'Miami',            venue: 'Hard Rock Stadium' },
+  // Ronda de 32 — fechas y orden oficial FIFA 2026 (UTC = hora Venezuela + 4h)
+  { matchNumber: 73,  phase: 'round32', label: '2A vs 2B',  date: '2026-06-28T19:00:00Z', city: 'Dallas',           venue: 'AT&T Stadium' },
+  { matchNumber: 76,  phase: 'round32', label: '1C vs 2F',  date: '2026-06-29T17:00:00Z', city: 'Miami',            venue: 'Hard Rock Stadium' },
+  { matchNumber: 74,  phase: 'round32', label: '1E vs 3er', date: '2026-06-29T20:30:00Z', city: 'Nueva York',       venue: 'MetLife Stadium' },
+  { matchNumber: 75,  phase: 'round32', label: '1F vs 2C',  date: '2026-06-30T01:00:00Z', city: 'Los Ángeles',      venue: 'SoFi Stadium' },
+  { matchNumber: 78,  phase: 'round32', label: '2E vs 2I',  date: '2026-06-30T17:00:00Z', city: 'Seattle',          venue: 'Lumen Field' },
+  { matchNumber: 77,  phase: 'round32', label: '1I vs 3er', date: '2026-06-30T21:00:00Z', city: 'Boston',           venue: 'Gillette Stadium' },
+  { matchNumber: 79,  phase: 'round32', label: '1A vs 3er', date: '2026-07-01T01:00:00Z', city: 'Toronto',          venue: 'BMO Field' },
+  { matchNumber: 80,  phase: 'round32', label: '1L vs 3er', date: '2026-07-01T16:00:00Z', city: 'Chicago',          venue: 'Soldier Field' },
+  { matchNumber: 82,  phase: 'round32', label: '1G vs 3er', date: '2026-07-01T20:00:00Z', city: 'Guadalajara',      venue: 'Estadio Akron' },
+  { matchNumber: 81,  phase: 'round32', label: '1D vs 3er', date: '2026-07-02T00:00:00Z', city: 'San Francisco',    venue: 'Levi\'s Stadium' },
+  { matchNumber: 84,  phase: 'round32', label: '1H vs 2J',  date: '2026-07-02T19:00:00Z', city: 'Vancouver',        venue: 'BC Place' },
+  { matchNumber: 83,  phase: 'round32', label: '2K vs 2L',  date: '2026-07-02T23:00:00Z', city: 'Nueva York',       venue: 'MetLife Stadium' },
+  { matchNumber: 85,  phase: 'round32', label: '1B vs 3er', date: '2026-07-03T03:00:00Z', city: 'Dallas',           venue: 'AT&T Stadium' },
+  { matchNumber: 88,  phase: 'round32', label: '2D vs 2G',  date: '2026-07-03T18:00:00Z', city: 'Ciudad de México', venue: 'Estadio Azteca' },
+  { matchNumber: 86,  phase: 'round32', label: '1J vs 2H',  date: '2026-07-03T22:00:00Z', city: 'Los Ángeles',      venue: 'SoFi Stadium' },
+  { matchNumber: 87,  phase: 'round32', label: '1K vs 3er', date: '2026-07-04T01:30:00Z', city: 'Miami',            venue: 'Hard Rock Stadium' },
 
   // Octavos de final — 8 partidos
-  { matchNumber: 90,  phase: 'round16', label: 'Octavos 1', date: '2026-07-04T19:00:00Z', city: 'Los Ángeles',     venue: 'SoFi Stadium' },
-  { matchNumber: 89,  phase: 'round16', label: 'Octavos 2', date: '2026-07-04T23:00:00Z', city: 'Nueva York',      venue: 'MetLife Stadium' },
-  { matchNumber: 91,  phase: 'round16', label: 'Octavos 3', date: '2026-07-05T22:00:00Z', city: 'Dallas',          venue: 'AT&T Stadium' },
-  { matchNumber: 92,  phase: 'round16', label: 'Octavos 4', date: '2026-07-06T02:00:00Z', city: 'Ciudad de México', venue: 'Estadio Azteca' },
-  { matchNumber: 93,  phase: 'round16', label: 'Octavos 5', date: '2026-07-06T21:00:00Z', city: 'Miami',           venue: 'Hard Rock Stadium' },
-  { matchNumber: 94,  phase: 'round16', label: 'Octavos 6', date: '2026-07-07T02:00:00Z', city: 'Toronto',         venue: 'BMO Field' },
-  { matchNumber: 95,  phase: 'round16', label: 'Octavos 7', date: '2026-07-07T18:00:00Z', city: 'Boston',          venue: 'Gillette Stadium' },
-  { matchNumber: 96,  phase: 'round16', label: 'Octavos 8', date: '2026-07-07T22:00:00Z', city: 'Seattle',         venue: 'Lumen Field' },
+  { matchNumber: 90,  phase: 'round16', label: 'Octavos 1', date: '2026-07-04T17:00:00Z', city: 'Los Ángeles',     venue: 'SoFi Stadium' },
+  { matchNumber: 89,  phase: 'round16', label: 'Octavos 2', date: '2026-07-04T21:00:00Z', city: 'Nueva York',      venue: 'MetLife Stadium' },
+  { matchNumber: 91,  phase: 'round16', label: 'Octavos 3', date: '2026-07-05T20:00:00Z', city: 'Dallas',          venue: 'AT&T Stadium' },
+  { matchNumber: 92,  phase: 'round16', label: 'Octavos 4', date: '2026-07-06T00:00:00Z', city: 'Ciudad de México', venue: 'Estadio Azteca' },
+  { matchNumber: 93,  phase: 'round16', label: 'Octavos 5', date: '2026-07-06T19:00:00Z', city: 'Miami',           venue: 'Hard Rock Stadium' },
+  { matchNumber: 94,  phase: 'round16', label: 'Octavos 6', date: '2026-07-07T00:00:00Z', city: 'Toronto',         venue: 'BMO Field' },
+  { matchNumber: 95,  phase: 'round16', label: 'Octavos 7', date: '2026-07-07T16:00:00Z', city: 'Boston',          venue: 'Gillette Stadium' },
+  { matchNumber: 96,  phase: 'round16', label: 'Octavos 8', date: '2026-07-07T20:00:00Z', city: 'Seattle',         venue: 'Lumen Field' },
 
   // Cuartos de final — 4 partidos
-  { matchNumber: 97,  phase: 'quarters', label: 'Cuartos 1', date: '2026-07-09T22:00:00Z', city: 'Nueva York',     venue: 'MetLife Stadium' },
-  { matchNumber: 98,  phase: 'quarters', label: 'Cuartos 2', date: '2026-07-10T21:00:00Z', city: 'Los Ángeles',    venue: 'SoFi Stadium' },
-  { matchNumber: 99,  phase: 'quarters', label: 'Cuartos 3', date: '2026-07-11T23:00:00Z', city: 'Dallas',         venue: 'AT&T Stadium' },
-  { matchNumber: 100, phase: 'quarters', label: 'Cuartos 4', date: '2026-07-12T03:00:00Z', city: 'Miami',          venue: 'Hard Rock Stadium' },
+  { matchNumber: 97,  phase: 'quarters', label: 'Cuartos 1', date: '2026-07-09T20:00:00Z', city: 'Nueva York',     venue: 'MetLife Stadium' },
+  { matchNumber: 98,  phase: 'quarters', label: 'Cuartos 2', date: '2026-07-10T19:00:00Z', city: 'Los Ángeles',    venue: 'SoFi Stadium' },
+  { matchNumber: 99,  phase: 'quarters', label: 'Cuartos 3', date: '2026-07-11T21:00:00Z', city: 'Dallas',         venue: 'AT&T Stadium' },
+  { matchNumber: 100, phase: 'quarters', label: 'Cuartos 4', date: '2026-07-12T01:00:00Z', city: 'Miami',          venue: 'Hard Rock Stadium' },
 
   // Semifinales — 2 partidos
-  { matchNumber: 101, phase: 'semis', label: 'Semifinal 1', date: '2026-07-14T21:00:00Z', city: 'Dallas',          venue: 'AT&T Stadium' },
-  { matchNumber: 102, phase: 'semis', label: 'Semifinal 2', date: '2026-07-15T21:00:00Z', city: 'Nueva York',      venue: 'MetLife Stadium' },
+  { matchNumber: 101, phase: 'semis', label: 'Semifinal 1', date: '2026-07-14T19:00:00Z', city: 'Dallas',          venue: 'AT&T Stadium' },
+  { matchNumber: 102, phase: 'semis', label: 'Semifinal 2', date: '2026-07-15T19:00:00Z', city: 'Nueva York',      venue: 'MetLife Stadium' },
 
   // Tercer puesto
-  { matchNumber: 103, phase: 'third', label: '3er y 4to puesto', date: '2026-07-18T23:00:00Z', city: 'Miami',      venue: 'Hard Rock Stadium' },
+  { matchNumber: 103, phase: 'third', label: '3er y 4to puesto', date: '2026-07-18T21:00:00Z', city: 'Miami',      venue: 'Hard Rock Stadium' },
 
   // Final
-  { matchNumber: 104, phase: 'final', label: 'FINAL', date: '2026-07-19T21:00:00Z', city: 'Nueva York',            venue: 'MetLife Stadium' },
+  { matchNumber: 104, phase: 'final', label: 'FINAL', date: '2026-07-19T19:00:00Z', city: 'Nueva York',            venue: 'MetLife Stadium' },
 ];
 
 // =============================================
