@@ -3,6 +3,7 @@ const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
 const { calculateGroupStandings, awardGroupPositionPoints } = require('../utils/groupScoring');
+const { getUserPredictedAdvancement } = require('../utils/bracketSimulation');
 
 const prisma = new PrismaClient();
 
@@ -143,25 +144,62 @@ router.post('/scoring/recalculate', auth, admin, async (req, res) => {
     const configs = await prisma.scoringConfig.findMany();
     for (const cfg of configs) scoringMap[cfg.phase] = cfg;
 
+    const KNOCKOUT_PHASES = new Set(['round32', 'round16', 'quarters', 'semis', 'third', 'final']);
+
+    const ROUND_MATCH_RANGES = { round32: [73,88], round16: [89,96], quarters: [97,100], semis: [101,102] };
+
+    function teamsMatchSimulation(simulation, match) {
+      const actualHome = match.homeTeam?.name;
+      const actualAway = match.awayTeam?.name;
+      if (!actualHome || !actualAway) return false;
+      if (match.phase === 'final') {
+        return simulation.final.has(actualHome) && simulation.final.has(actualAway);
+      }
+      if (match.phase === 'third') {
+        const thirdTeams = new Set([...simulation.semis].filter(t => !simulation.final.has(t)));
+        return thirdTeams.has(actualHome) && thirdTeams.has(actualAway);
+      }
+      const range = ROUND_MATCH_RANGES[match.phase];
+      if (!range || !simulation.matchTeams) return false;
+      for (let mn = range[0]; mn <= range[1]; mn++) {
+        const slot = simulation.matchTeams[mn];
+        if (!slot?.home?.name || !slot?.away?.name) continue;
+        if ((actualHome === slot.home.name && actualAway === slot.away.name) ||
+            (actualHome === slot.away.name  && actualAway === slot.home.name)) return true;
+      }
+      return false;
+    }
+
     // 1. Recalculate match prediction points
     const matches = await prisma.match.findMany({
       where: { status: 'finished' },
-      include: { predictions: true },
+      include: { predictions: true, homeTeam: true, awayTeam: true },
     });
+
+    // Precompute bracket simulation for each user (used for team matching in knockout phases)
+    const allUsers = await prisma.user.findMany({ select: { id: true } });
+    const userSimulations = {};
+    for (const user of allUsers) {
+      userSimulations[user.id] = await getUserPredictedAdvancement(user.id, prisma);
+    }
 
     let totalUpdated = 0;
     for (const match of matches) {
       if (match.homeScore === null || match.awayScore === null) continue;
       const cfg = scoringMap[match.phase] || { exactScore: 3, correctResult: 1 };
+      const isKnockout = KNOCKOUT_PHASES.has(match.phase);
 
       for (const pred of match.predictions) {
         let points = 0;
-        if (pred.homeScore === match.homeScore && pred.awayScore === match.awayScore) {
-          points = cfg.exactScore;
-        } else {
-          const actualResult = match.homeScore > match.awayScore ? 'H' : match.homeScore < match.awayScore ? 'A' : 'D';
-          const predResult = pred.homeScore > pred.awayScore ? 'H' : pred.homeScore < pred.awayScore ? 'A' : 'D';
-          if (actualResult === predResult) points = cfg.correctResult;
+        const canScore = !isKnockout || teamsMatchSimulation(userSimulations[pred.userId] || {}, match);
+        if (canScore) {
+          if (pred.homeScore === match.homeScore && pred.awayScore === match.awayScore) {
+            points = cfg.exactScore;
+          } else {
+            const actualResult = match.homeScore > match.awayScore ? 'H' : match.homeScore < match.awayScore ? 'A' : 'D';
+            const predResult = pred.homeScore > pred.awayScore ? 'H' : pred.homeScore < pred.awayScore ? 'A' : 'D';
+            if (actualResult === predResult) points = cfg.correctResult;
+          }
         }
         await prisma.prediction.update({ where: { id: pred.id }, data: { points } });
         totalUpdated++;
@@ -184,33 +222,44 @@ router.post('/scoring/recalculate', auth, admin, async (req, res) => {
       groupsRecalculated++;
     }
 
-    // 3. Recalculate advancement points derived from match predictions
+    // 3. Recalculate advancement points via bracket simulation
     await prisma.advancementPrediction.deleteMany({});
     let advancementUpdated = 0;
 
-    const knockoutFinished = await prisma.match.findMany({
-      where: { status: 'finished', phase: { in: Object.keys(NEXT_ROUND_MAP) } },
-      include: { homeTeam: true, awayTeam: true, predictions: true },
-    });
+    // Build sets of teams that actually advanced to each round
+    const actualAdvanced = { round16: new Set(), quarters: new Set(), semis: new Set(), final: new Set() };
+    for (const [phase, nextRound] of Object.entries(NEXT_ROUND_MAP)) {
+      const finishedMatches = await prisma.match.findMany({
+        where: { status: 'finished', phase },
+        include: { homeTeam: true, awayTeam: true },
+      });
+      for (const m of finishedMatches) {
+        if (!m.homeTeam || !m.awayTeam || m.homeScore === null || m.awayScore === null) continue;
+        let winnerName;
+        if (m.homeScore > m.awayScore) winnerName = m.homeTeam.name;
+        else if (m.homeScore < m.awayScore) winnerName = m.awayTeam.name;
+        else winnerName = m.penaltyWinner === 'away' ? m.awayTeam.name : m.homeTeam.name;
+        actualAdvanced[nextRound].add(winnerName);
+      }
+    }
 
-    for (const m of knockoutFinished) {
-      if (!m.homeTeam || !m.awayTeam || m.homeScore === null || m.awayScore === null) continue;
-      const homeWins = m.homeScore >= m.awayScore;
-      const winnerName = homeWins ? m.homeTeam.name : m.awayTeam.name;
-      const nextRound = NEXT_ROUND_MAP[m.phase];
-      const betPhase = ADV_BET_PHASE[nextRound];
-      const advCfg = scoringMap[betPhase] || { correctResult: 0 };
-      if (!advCfg.correctResult) continue;
-
-      for (const pred of m.predictions) {
-        const predHomeWins = pred.homeScore >= pred.awayScore;
-        if (predHomeWins === homeWins) {
-          await prisma.advancementPrediction.upsert({
-            where: { userId_round_teamName: { userId: pred.userId, round: nextRound, teamName: winnerName } },
-            update: { points: advCfg.correctResult },
-            create: { userId: pred.userId, round: nextRound, teamName: winnerName, points: advCfg.correctResult },
-          });
-          advancementUpdated++;
+    // Use precomputed simulations (already fetched above for team matching)
+    for (const user of allUsers) {
+      const predicted = userSimulations[user.id] || {};
+      for (const [round, actualTeams] of Object.entries(actualAdvanced)) {
+        if (actualTeams.size === 0) continue;
+        const betPhase = ADV_BET_PHASE[round];
+        const advCfg = scoringMap[betPhase] || { correctResult: 0 };
+        if (!advCfg.correctResult) continue;
+        for (const teamName of actualTeams) {
+          if (predicted[round].has(teamName)) {
+            await prisma.advancementPrediction.upsert({
+              where: { userId_round_teamName: { userId: user.id, round, teamName } },
+              update: { points: advCfg.correctResult },
+              create: { userId: user.id, round, teamName, points: advCfg.correctResult },
+            });
+            advancementUpdated++;
+          }
         }
       }
     }

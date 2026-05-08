@@ -2,6 +2,7 @@ const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
 const THIRD_PLACE_COMBINATIONS = require('../combinaciones.json');
+const { sortByFifaRules } = require('../utils/groupScoring');
 
 const prisma = new PrismaClient();
 
@@ -46,12 +47,15 @@ router.get('/lock', async (req, res) => {
 
 // POST /api/predictions — save or update prediction
 router.post('/', auth, async (req, res) => {
-  const { matchId, homeScore, awayScore } = req.body;
+  const { matchId, homeScore, awayScore, penaltyWinner } = req.body;
   if (matchId === undefined || homeScore === undefined || awayScore === undefined)
     return res.status(400).json({ error: 'matchId, homeScore y awayScore son requeridos' });
 
   if (homeScore < 0 || awayScore < 0 || homeScore > 20 || awayScore > 20)
     return res.status(400).json({ error: 'Puntuación inválida' });
+
+  if (penaltyWinner !== undefined && penaltyWinner !== null && !['home','away'].includes(penaltyWinner))
+    return res.status(400).json({ error: 'penaltyWinner debe ser "home" o "away"' });
 
   if (await isLocked())
     return res.status(423).json({ error: 'Las predicciones están bloqueadas. El torneo ya comenzó.' });
@@ -62,15 +66,13 @@ router.post('/', auth, async (req, res) => {
     if (match.status !== 'pending')
       return res.status(400).json({ error: 'El partido ya comenzó, no puedes modificar tu predicción' });
 
+    // penaltyWinner only relevant for knockout draws
+    const pw = (penaltyWinner && ['home','away'].includes(penaltyWinner)) ? penaltyWinner : null;
+
     const prediction = await prisma.prediction.upsert({
-      where: { userId_matchId: { userId: req.user.id, matchId: parseInt(matchId) } },
-      update: { homeScore: parseInt(homeScore), awayScore: parseInt(awayScore) },
-      create: {
-        userId: req.user.id,
-        matchId: parseInt(matchId),
-        homeScore: parseInt(homeScore),
-        awayScore: parseInt(awayScore),
-      },
+      where:  { userId_matchId: { userId: req.user.id, matchId: parseInt(matchId) } },
+      update: { homeScore: parseInt(homeScore), awayScore: parseInt(awayScore), penaltyWinner: pw },
+      create: { userId: req.user.id, matchId: parseInt(matchId), homeScore: parseInt(homeScore), awayScore: parseInt(awayScore), penaltyWinner: pw },
     });
 
     res.json(prediction);
@@ -94,7 +96,8 @@ router.post('/batch', auth, async (req, res) => {
     const errors = [];
 
     for (const pred of predictions) {
-      const { matchId, homeScore, awayScore } = pred;
+      const { matchId, homeScore, awayScore, penaltyWinner } = pred;
+      const pw = (penaltyWinner && ['home','away'].includes(penaltyWinner)) ? penaltyWinner : null;
       try {
         const match = await prisma.match.findUnique({ where: { id: parseInt(matchId) } });
         if (!match || match.status !== 'pending') {
@@ -103,14 +106,9 @@ router.post('/batch', auth, async (req, res) => {
         }
 
         const saved = await prisma.prediction.upsert({
-          where: { userId_matchId: { userId: req.user.id, matchId: parseInt(matchId) } },
-          update: { homeScore: parseInt(homeScore), awayScore: parseInt(awayScore) },
-          create: {
-            userId: req.user.id,
-            matchId: parseInt(matchId),
-            homeScore: parseInt(homeScore),
-            awayScore: parseInt(awayScore),
-          },
+          where:  { userId_matchId: { userId: req.user.id, matchId: parseInt(matchId) } },
+          update: { homeScore: parseInt(homeScore), awayScore: parseInt(awayScore), penaltyWinner: pw },
+          create: { userId: req.user.id, matchId: parseInt(matchId), homeScore: parseInt(homeScore), awayScore: parseInt(awayScore), penaltyWinner: pw },
         });
         results.push(saved);
       } catch {
@@ -149,6 +147,7 @@ router.get('/bracket', auth, async (req, res) => {
       const gMatches = groupMatches.filter(m => m.group === group);
       const ts = {};
       let predictedCount = 0;
+      const scoredMatches = [];
 
       for (const m of gMatches) {
         if (!ts[m.homeTeamId]) ts[m.homeTeamId] = { id: m.homeTeamId, name: m.homeTeam.name, flag: m.homeTeam.flag, pts: 0, gf: 0, ga: 0, mp: 0 };
@@ -166,16 +165,15 @@ router.get('/bracket', auth, async (req, res) => {
         if (pred.homeScore > pred.awayScore)       { h.pts += 3; }
         else if (pred.homeScore === pred.awayScore) { h.pts += 1; a.pts += 1; }
         else                                        { a.pts += 3; }
+
+        scoredMatches.push({
+          homeTeamId: m.homeTeamId, awayTeamId: m.awayTeamId,
+          homeScore: pred.homeScore, awayScore: pred.awayScore,
+        });
       }
 
       groupStandings[group] = {
-        teams: Object.values(ts).sort((a, b) => {
-          if (b.pts !== a.pts) return b.pts - a.pts;
-          const gd = (b.gf - b.ga) - (a.gf - a.ga);
-          if (gd !== 0) return gd;
-          if (b.gf !== a.gf) return b.gf - a.gf;
-          return a.name.localeCompare(b.name);
-        }),
+        teams: sortByFifaRules(Object.values(ts), scoredMatches),
         predictedCount,
         totalMatches: gMatches.length,
       };
@@ -260,18 +258,22 @@ router.get('/bracket', auth, async (req, res) => {
     bbn[87] = { home: pos('K',0), away: third('1K') };            // 1K vs 3er(DEIJL)
     bbn[88] = { home: pos('D',1), away: pos('G',1) };             // 2D vs 2G
 
-    // Helper: predicted winner/loser of a match (draw = home advances)
+    // Helper: predicted winner/loser (draw → use penaltyWinner, default home)
     const winner = (mn) => {
       const m = matchByNumber[mn];
       const pred = m?.predictions?.[0];
       if (!pred || !bbn[mn]?.home || !bbn[mn]?.away) return null;
-      return pred.homeScore >= pred.awayScore ? bbn[mn].home : bbn[mn].away;
+      if (pred.homeScore > pred.awayScore) return bbn[mn].home;
+      if (pred.homeScore < pred.awayScore) return bbn[mn].away;
+      return pred.penaltyWinner === 'away' ? bbn[mn].away : bbn[mn].home;
     };
     const loser = (mn) => {
       const m = matchByNumber[mn];
       const pred = m?.predictions?.[0];
       if (!pred || !bbn[mn]?.home || !bbn[mn]?.away) return null;
-      return pred.homeScore >= pred.awayScore ? bbn[mn].away : bbn[mn].home;
+      if (pred.homeScore > pred.awayScore) return bbn[mn].away;
+      if (pred.homeScore < pred.awayScore) return bbn[mn].home;
+      return pred.penaltyWinner === 'away' ? bbn[mn].home : bbn[mn].away;
     };
 
     // 5. Round of 16 — cross-bracket FIFA 2026 pairings
@@ -338,9 +340,10 @@ router.get('/thirds', auth, async (req, res) => {
 
       completedGroups++;
       const stats = {};
+      const scoredMatchesForGroup = [];
       for (const m of gMatches) {
-        if (!stats[m.homeTeamId]) stats[m.homeTeamId] = { team: m.homeTeam, mp:0,w:0,d:0,l:0,gf:0,ga:0,pts:0 };
-        if (!stats[m.awayTeamId]) stats[m.awayTeamId] = { team: m.awayTeam, mp:0,w:0,d:0,l:0,gf:0,ga:0,pts:0 };
+        if (!stats[m.homeTeamId]) stats[m.homeTeamId] = { id: m.homeTeamId, name: m.homeTeam.name, team: m.homeTeam, mp:0,w:0,d:0,l:0,gf:0,ga:0,pts:0 };
+        if (!stats[m.awayTeamId]) stats[m.awayTeamId] = { id: m.awayTeamId, name: m.awayTeam.name, team: m.awayTeam, mp:0,w:0,d:0,l:0,gf:0,ga:0,pts:0 };
         const pred = predMap[m.id];
         const home = stats[m.homeTeamId], away = stats[m.awayTeamId];
         home.mp++; away.mp++;
@@ -349,14 +352,12 @@ router.get('/thirds', auth, async (req, res) => {
         if (pred.homeScore > pred.awayScore)       { home.w++; home.pts += 3; away.l++; }
         else if (pred.homeScore < pred.awayScore)  { away.w++; away.pts += 3; home.l++; }
         else { home.d++; home.pts++; away.d++; away.pts++; }
+        scoredMatchesForGroup.push({
+          homeTeamId: m.homeTeamId, awayTeamId: m.awayTeamId,
+          homeScore: pred.homeScore, awayScore: pred.awayScore,
+        });
       }
-      const sorted = Object.values(stats).sort((a, b) => {
-        if (b.pts !== a.pts) return b.pts - a.pts;
-        const gd = (b.gf - b.ga) - (a.gf - a.ga);
-        if (gd !== 0) return gd;
-        if (b.gf !== a.gf) return b.gf - a.gf;
-        return a.team.name.localeCompare(b.team.name);
-      });
+      const sorted = sortByFifaRules(Object.values(stats), scoredMatchesForGroup);
       if (sorted[2]) thirdsRaw.push({ group, ...sorted[2] });
     }
 
@@ -432,9 +433,10 @@ router.get('/groups/:group/standings', auth, async (req, res) => {
 
     const stats = {};
     for (const team of teams) {
-      stats[team.id] = { team, mp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
+      stats[team.id] = { id: team.id, name: team.name, team, mp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
     }
 
+    const scoredMatchesForStandings = [];
     for (const match of groupMatches) {
       const pred = predMap[match.id];
       if (!pred) continue;
@@ -454,15 +456,13 @@ router.get('/groups/:group/standings', auth, async (req, res) => {
         home.d++; home.pts++;
         away.d++; away.pts++;
       }
+      scoredMatchesForStandings.push({
+        homeTeamId: match.homeTeamId, awayTeamId: match.awayTeamId,
+        homeScore: pred.homeScore, awayScore: pred.awayScore,
+      });
     }
 
-    const sorted = Object.values(stats).sort((a, b) => {
-      if (b.pts !== a.pts) return b.pts - a.pts;
-      const gdDiff = (b.gf - b.ga) - (a.gf - a.ga);
-      if (gdDiff !== 0) return gdDiff;
-      if (b.gf !== a.gf) return b.gf - a.gf;
-      return a.team.name.localeCompare(b.team.name);
-    });
+    const sorted = sortByFifaRules(Object.values(stats), scoredMatchesForStandings);
 
     res.json({
       standings: sorted.map((s, i) => ({

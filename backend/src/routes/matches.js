@@ -3,6 +3,7 @@ const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
 const { calculateGroupStandings, calculatePredictedStandings, awardGroupPositionPoints } = require('../utils/groupScoring');
+const { getUserPredictedAdvancement } = require('../utils/bracketSimulation');
 
 const prisma = new PrismaClient();
 
@@ -11,6 +12,40 @@ function calculatePoints(actualHome, actualAway, predHome, predAway, exactScore 
   const actual = actualHome > actualAway ? 'H' : actualHome < actualAway ? 'A' : 'D';
   const pred = predHome > predAway ? 'H' : predHome < predAway ? 'A' : 'D';
   return actual === pred ? correctResult : 0;
+}
+
+const KNOCKOUT_PHASES = new Set(['round32', 'round16', 'quarters', 'semis', 'third', 'final']);
+
+// Match number ranges per knockout round (FIFA 2026 official numbering)
+const ROUND_MATCH_RANGES = {
+  round32:  [73, 88],
+  round16:  [89, 96],
+  quarters: [97, 100],
+  semis:    [101, 102],
+};
+
+function teamsMatchSimulation(simulation, match) {
+  const actualHome = match.homeTeam?.name;
+  const actualAway = match.awayTeam?.name;
+  if (!actualHome || !actualAway) return false;
+
+  if (match.phase === 'final') {
+    return simulation.final.has(actualHome) && simulation.final.has(actualAway);
+  }
+  if (match.phase === 'third') {
+    const thirdTeams = new Set([...simulation.semis].filter(t => !simulation.final.has(t)));
+    return thirdTeams.has(actualHome) && thirdTeams.has(actualAway);
+  }
+  // Search across ALL predicted slots in the round (same as Excel COUNTIF across all round matches)
+  const range = ROUND_MATCH_RANGES[match.phase];
+  if (!range || !simulation.matchTeams) return false;
+  for (let mn = range[0]; mn <= range[1]; mn++) {
+    const slot = simulation.matchTeams[mn];
+    if (!slot?.home?.name || !slot?.away?.name) continue;
+    if ((actualHome === slot.home.name && actualAway === slot.away.name) ||
+        (actualHome === slot.away.name  && actualAway === slot.home.name)) return true;
+  }
+  return false;
 }
 
 const PHASE_DEFAULTS = {
@@ -119,12 +154,16 @@ router.get('/:id', async (req, res) => {
 
 // PUT /api/matches/:id/result — Admin only
 router.put('/:id/result', auth, admin, async (req, res) => {
-  const { homeScore, awayScore, status } = req.body;
+  const { homeScore, awayScore, status, penaltyWinner } = req.body;
   if (homeScore === undefined || awayScore === undefined)
     return res.status(400).json({ error: 'homeScore y awayScore son requeridos' });
 
+  if (penaltyWinner !== undefined && penaltyWinner !== null && !['home','away'].includes(penaltyWinner))
+    return res.status(400).json({ error: 'penaltyWinner debe ser "home" o "away"' });
+
   const matchId = parseInt(req.params.id);
   const finalStatus = status || 'finished';
+  const pw = (penaltyWinner && ['home','away'].includes(penaltyWinner)) ? penaltyWinner : null;
 
   try {
     const match = await prisma.match.update({
@@ -132,25 +171,15 @@ router.put('/:id/result', auth, admin, async (req, res) => {
       data: {
         homeScore: parseInt(homeScore),
         awayScore: parseInt(awayScore),
+        penaltyWinner: pw,
         status: finalStatus,
       },
       include: { homeTeam: true, awayTeam: true },
     });
 
-    // Recalculate points for all predictions of this match
     const cfg = await getScoringConfig(match.phase);
     const predictions = await prisma.prediction.findMany({ where: { matchId } });
-    for (const pred of predictions) {
-      const points = calculatePoints(
-        parseInt(homeScore),
-        parseInt(awayScore),
-        pred.homeScore,
-        pred.awayScore,
-        cfg.exactScore,
-        cfg.correctResult
-      );
-      await prisma.prediction.update({ where: { id: pred.id }, data: { points } });
-    }
+    const isKnockout = KNOCKOUT_PHASES.has(match.phase);
 
     // Auto-calculate group position points when all 6 matches of a group finish
     let groupPointsUpdated = 0;
@@ -165,36 +194,75 @@ router.put('/:id/result', auth, admin, async (req, res) => {
       }
     }
 
-    // Award advancement points derived automatically from match predictions
+    // For knockout phases: need bracket simulation per user for team matching + advancement
     const NEXT_ROUND_MAP = { round32: 'round16', round16: 'quarters', quarters: 'semis', semis: 'final' };
     const ADV_BET_PHASE = { round16: 'bet_round16', quarters: 'bet_quarters', semis: 'bet_semis', final: 'bet_final' };
     let advancementUpdated = 0;
 
-    if (NEXT_ROUND_MAP[match.phase] && finalStatus === 'finished' && match.homeTeam && match.awayTeam) {
+    if (isKnockout && finalStatus === 'finished') {
       const hScore = parseInt(homeScore);
       const aScore = parseInt(awayScore);
-      const homeWins = hScore >= aScore;
-      const winnerName = homeWins ? match.homeTeam.name : match.awayTeam.name;
-      const nextRound = NEXT_ROUND_MAP[match.phase];
-      const advCfg = await getScoringConfig(ADV_BET_PHASE[nextRound]);
-
-      // Clear previous advancement records for both teams of this match (handles result corrections)
-      await prisma.advancementPrediction.deleteMany({
-        where: { round: nextRound, teamName: { in: [match.homeTeam.name, match.awayTeam.name] } },
-      });
-
-      // Award to users who predicted the correct winner direction
-      const advRecords = [];
-      for (const pred of predictions) {
-        const predHomeWins = pred.homeScore >= pred.awayScore;
-        if (predHomeWins === homeWins) {
-          advRecords.push({ userId: pred.userId, round: nextRound, teamName: winnerName, points: advCfg.correctResult });
+      let winnerName = null, loserName = null;
+      if (match.homeTeam && match.awayTeam) {
+        if (hScore > aScore) {
+          winnerName = match.homeTeam.name; loserName = match.awayTeam.name;
+        } else if (hScore < aScore) {
+          winnerName = match.awayTeam.name; loserName = match.homeTeam.name;
+        } else {
+          // Draw in regulation — penaltyWinner decides who advances
+          winnerName = pw === 'away' ? match.awayTeam.name : match.homeTeam.name;
+          loserName  = pw === 'away' ? match.homeTeam.name : match.awayTeam.name;
         }
       }
-      if (advRecords.length > 0) {
-        await prisma.advancementPrediction.createMany({ data: advRecords, skipDuplicates: true });
-        advancementUpdated = advRecords.length;
-        console.log(`🚀 ${winnerName} → ${nextRound}: ${advRecords.length} usuarios premiados (${advCfg.correctResult}pts)`);
+      const nextRound  = NEXT_ROUND_MAP[match.phase];
+      const advCfg     = nextRound ? await getScoringConfig(ADV_BET_PHASE[nextRound]) : null;
+
+      // Clear advancement records for both teams of this match
+      if (nextRound && winnerName && loserName) {
+        await prisma.advancementPrediction.deleteMany({
+          where: { round: nextRound, teamName: { in: [winnerName, loserName] } },
+        });
+      }
+
+      // Build prediction map for quick lookup
+      const predByUser = {};
+      for (const pred of predictions) predByUser[pred.userId] = pred;
+
+      // Run simulation once per user — used for both team matching AND advancement
+      const users = await prisma.user.findMany({ select: { id: true } });
+      for (const user of users) {
+        const simulation = await getUserPredictedAdvancement(user.id, prisma);
+
+        // Match prediction points: only if both teams match user's predicted bracket slot
+        const pred = predByUser[user.id];
+        if (pred) {
+          let points = 0;
+          if (teamsMatchSimulation(simulation, match)) {
+            points = calculatePoints(hScore, aScore, pred.homeScore, pred.awayScore, cfg.exactScore, cfg.correctResult);
+          }
+          await prisma.prediction.update({ where: { id: pred.id }, data: { points } });
+        }
+
+        // Advancement points: award if user predicted the winner to advance to next round
+        if (nextRound && winnerName && advCfg?.correctResult && simulation[nextRound].has(winnerName)) {
+          await prisma.advancementPrediction.create({
+            data: { userId: user.id, round: nextRound, teamName: winnerName, points: advCfg.correctResult },
+          });
+          advancementUpdated++;
+        }
+      }
+
+      if (advancementUpdated > 0)
+        console.log(`🚀 ${winnerName} → ${nextRound}: ${advancementUpdated} usuarios premiados (${advCfg?.correctResult}pts)`);
+    } else {
+      // Group stage: score predictions without team matching (teams are fixed)
+      for (const pred of predictions) {
+        const points = calculatePoints(
+          parseInt(homeScore), parseInt(awayScore),
+          pred.homeScore, pred.awayScore,
+          cfg.exactScore, cfg.correctResult
+        );
+        await prisma.prediction.update({ where: { id: pred.id }, data: { points } });
       }
     }
 

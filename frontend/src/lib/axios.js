@@ -12,14 +12,18 @@ api.interceptors.request.use(config => {
   return config;
 });
 
-// Handle 401 — redirect to login
+// Handle 401 — only redirect if there was an active session (token existed)
 api.interceptors.response.use(
   res => res,
   err => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      const hadToken = !!localStorage.getItem('token');
+      const isAuthRoute = err.config?.url?.includes('/auth/login') || err.config?.url?.includes('/auth/register');
+      if (hadToken && !isAuthRoute) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(err);
   }
