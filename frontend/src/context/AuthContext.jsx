@@ -16,7 +16,15 @@ export function AuthProvider({ children }) {
 
     api.get('/auth/me')
       .then(res => setUser(res.data))
-      .catch(() => { localStorage.removeItem('token'); localStorage.removeItem('user'); setUser(null); })
+      .catch(err => {
+        // Only clear session on explicit auth rejection, not on network/server errors
+        if (err.response?.status === 401 || err.response?.status === 403) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setUser(null);
+        }
+        // On 500 / network errors: keep the token and stay logged in
+      })
       .finally(() => setLoading(false));
   }, []);
 
