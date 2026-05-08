@@ -34,6 +34,7 @@ export default function Admin() {
   const [recalculating, setRecalculating] = useState(false);
   const [champForm, setChampForm] = useState({ champion:'', runnerUp:'', third:'', topScorer:'', bestPlayer:'', bestGoalkeeper:'' });
   const [calculatingChamp, setCalculatingChamp] = useState(false);
+  const [derivingChamp, setDerivingChamp] = useState(false);
   const [users, setUsers] = useState([]);
   const [newUser, setNewUser] = useState({ name: '', username: '', password: '' });
   const [creatingUser, setCreatingUser] = useState(false);
@@ -101,6 +102,53 @@ export default function Admin() {
       toast.error(err.response?.data?.error || 'Error al recalcular');
     } finally {
       setRecalculating(false);
+    }
+  };
+
+  const handleDeriveChampion = async () => {
+    setDerivingChamp(true);
+    try {
+      // Fetch final (match 104) and third place (match 103) results
+      const [finalRes, thirdRes] = await Promise.allSettled([
+        api.get('/matches?phase=final'),
+        api.get('/matches?phase=third'),
+      ]);
+
+      let champion = '', runnerUp = '', third = '';
+
+      if (finalRes.status === 'fulfilled') {
+        const finals = finalRes.value.data.filter(m => m.status === 'finished' && m.homeScore !== null);
+        if (finals.length > 0) {
+          const f = finals[0];
+          if (f.homeScore > f.awayScore) {
+            champion = f.homeTeam?.name || ''; runnerUp = f.awayTeam?.name || '';
+          } else if (f.homeScore < f.awayScore) {
+            champion = f.awayTeam?.name || ''; runnerUp = f.homeTeam?.name || '';
+          } else {
+            champion = f.penaltyWinner === 'away' ? (f.awayTeam?.name || '') : (f.homeTeam?.name || '');
+            runnerUp = f.penaltyWinner === 'away' ? (f.homeTeam?.name || '') : (f.awayTeam?.name || '');
+          }
+        }
+      }
+
+      if (thirdRes.status === 'fulfilled') {
+        const thirds = thirdRes.value.data.filter(m => m.status === 'finished' && m.homeScore !== null);
+        if (thirds.length > 0) {
+          const t = thirds[0];
+          if (t.homeScore > t.awayScore) third = t.homeTeam?.name || '';
+          else if (t.homeScore < t.awayScore) third = t.awayTeam?.name || '';
+          else third = t.penaltyWinner === 'away' ? (t.awayTeam?.name || '') : (t.homeTeam?.name || '');
+        }
+      }
+
+      if (!champion) { toast.error('El partido Final aún no tiene resultado'); return; }
+
+      setChampForm(prev => ({ ...prev, champion, runnerUp, third }));
+      toast.success('✅ Campeón, Finalista y 3er Lugar auto-derivados del torneo');
+    } catch (err) {
+      toast.error('Error al derivar resultados');
+    } finally {
+      setDerivingChamp(false);
     }
   };
 
@@ -180,6 +228,7 @@ export default function Admin() {
         init[m.id] = {
           homeScore: m.homeScore !== null ? String(m.homeScore) : '',
           awayScore: m.awayScore !== null ? String(m.awayScore) : '',
+          penaltyWinner: m.penaltyWinner || '',
           status: m.status,
         };
       }
@@ -208,10 +257,18 @@ export default function Admin() {
     }));
   };
 
+  const KNOCKOUT_PHASES = ['round32','round16','quarters','semis','third','final'];
+
   const handleSaveResult = async (matchId) => {
     const r = results[matchId];
     if (r.homeScore === '' || r.awayScore === '') {
       toast.error('Ingresa ambos marcadores');
+      return;
+    }
+    const isKnockoutPhase = KNOCKOUT_PHASES.includes(phase);
+    const isDraw = r.homeScore === r.awayScore;
+    if (isKnockoutPhase && isDraw && !r.penaltyWinner) {
+      toast.error('Selecciona quién ganó por penales');
       return;
     }
     setUpdating(prev => ({ ...prev, [matchId]: true }));
@@ -220,10 +277,11 @@ export default function Admin() {
         homeScore: parseInt(r.homeScore),
         awayScore: parseInt(r.awayScore),
         status: 'finished',
+        penaltyWinner: isKnockoutPhase && isDraw ? r.penaltyWinner : null,
       });
       setMatches(prev => prev.map(m =>
         m.id === matchId
-          ? { ...m, homeScore: parseInt(r.homeScore), awayScore: parseInt(r.awayScore), status: 'finished' }
+          ? { ...m, homeScore: parseInt(r.homeScore), awayScore: parseInt(r.awayScore), status: 'finished', penaltyWinner: isKnockoutPhase && isDraw ? r.penaltyWinner : null }
           : m
       ));
       toast.success('✅ Resultado guardado y puntos calculados');
@@ -237,8 +295,11 @@ export default function Admin() {
   const handleStatusChange = async (matchId, status) => {
     try {
       await api.put(`/matches/${matchId}/status`, { status });
-      setMatches(prev => prev.map(m => m.id === matchId ? { ...m, status } : m));
-      setResults(prev => ({ ...prev, [matchId]: { ...prev[matchId], status } }));
+      const cleared = status === 'pending' ? { homeScore: '', awayScore: '', penaltyWinner: '' } : {};
+      setMatches(prev => prev.map(m => m.id === matchId
+        ? { ...m, status, ...(status === 'pending' ? { homeScore: null, awayScore: null, penaltyWinner: null } : {}) }
+        : m));
+      setResults(prev => ({ ...prev, [matchId]: { ...prev[matchId], status, ...cleared } }));
       toast.success(`Estado actualizado: ${status}`);
     } catch {
       toast.error('Error al cambiar estado');
@@ -430,6 +491,10 @@ export default function Admin() {
             <p className="text-xs text-amber-700 mb-3">
               Ingresa los ganadores reales y calcula los puntos de todos los usuarios
             </p>
+            <button onClick={handleDeriveChampion} disabled={derivingChamp}
+              className="w-full mb-3 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-900 font-bold text-xs transition-all flex items-center justify-center gap-2">
+              {derivingChamp ? <Spinner size="sm" /> : '🔁 Auto-derivar Campeón/Finalista/3er del torneo'}
+            </button>
             <div className="space-y-2">
               {[
                 { key: 'champion',       label: '🏆 Campeón',       placeholder: 'País campeón' },
@@ -650,6 +715,29 @@ export default function Admin() {
                     </p>
                   </div>
                 </div>
+
+                {/* Penalty winner selector for knockout draws */}
+                {KNOCKOUT_PHASES.includes(phase) && r.homeScore !== '' && r.awayScore !== '' && r.homeScore === r.awayScore && (
+                  <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded-xl">
+                    <p className="text-xs font-bold text-amber-800 mb-1.5 text-center">⚽ Empate — ¿Quién avanza por penales?</p>
+                    <div className="flex gap-2">
+                      <button type="button"
+                        onClick={() => handleResultChange(match.id, 'penaltyWinner', 'home')}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                          r.penaltyWinner === 'home' ? 'bg-wc-blue text-white' : 'bg-white border border-gray-200 text-gray-600'
+                        }`}>
+                        {homeTeam?.name || 'Local'}
+                      </button>
+                      <button type="button"
+                        onClick={() => handleResultChange(match.id, 'penaltyWinner', 'away')}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                          r.penaltyWinner === 'away' ? 'bg-wc-blue text-white' : 'bg-white border border-gray-200 text-gray-600'
+                        }`}>
+                        {awayTeam?.name || 'Visitante'}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Date & save */}
                 <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">

@@ -223,7 +223,7 @@ router.post('/scoring/recalculate', auth, admin, async (req, res) => {
     }
 
     // 3. Recalculate advancement points via bracket simulation
-    await prisma.advancementPrediction.deleteMany({});
+    // Delete only rounds where we have actual match data (not future rounds)
     let advancementUpdated = 0;
 
     // Build sets of teams that actually advanced to each round
@@ -243,24 +243,35 @@ router.post('/scoring/recalculate', auth, admin, async (req, res) => {
       }
     }
 
+    // Delete only rounds where actual teams advanced (leaves future rounds untouched)
+    for (const [round, teams] of Object.entries(actualAdvanced)) {
+      if (teams.size > 0) {
+        await prisma.advancementPrediction.deleteMany({ where: { round } });
+      }
+    }
+
     // Use precomputed simulations (already fetched above for team matching)
     for (const user of allUsers) {
-      const predicted = userSimulations[user.id] || {};
-      for (const [round, actualTeams] of Object.entries(actualAdvanced)) {
-        if (actualTeams.size === 0) continue;
-        const betPhase = ADV_BET_PHASE[round];
-        const advCfg = scoringMap[betPhase] || { correctResult: 0 };
-        if (!advCfg.correctResult) continue;
-        for (const teamName of actualTeams) {
-          if (predicted[round].has(teamName)) {
-            await prisma.advancementPrediction.upsert({
-              where: { userId_round_teamName: { userId: user.id, round, teamName } },
-              update: { points: advCfg.correctResult },
-              create: { userId: user.id, round, teamName, points: advCfg.correctResult },
-            });
-            advancementUpdated++;
+      try {
+        const predicted = userSimulations[user.id] || {};
+        for (const [round, actualTeams] of Object.entries(actualAdvanced)) {
+          if (actualTeams.size === 0) continue;
+          const betPhase = ADV_BET_PHASE[round];
+          const advCfg = scoringMap[betPhase] || { correctResult: 0 };
+          if (!advCfg.correctResult) continue;
+          for (const teamName of actualTeams) {
+            if (predicted[round]?.has(teamName)) {
+              await prisma.advancementPrediction.upsert({
+                where: { userId_round_teamName: { userId: user.id, round, teamName } },
+                update: { points: advCfg.correctResult },
+                create: { userId: user.id, round, teamName, points: advCfg.correctResult },
+              });
+              advancementUpdated++;
+            }
           }
         }
+      } catch (userErr) {
+        console.error(`Error recalculando avance para usuario ${user.id}:`, userErr);
       }
     }
 

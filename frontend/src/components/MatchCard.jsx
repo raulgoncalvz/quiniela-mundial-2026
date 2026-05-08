@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 
+const KNOCKOUT_PHASES = ['round32','round16','quarters','semis','third','final'];
+
 const PHASE_LABELS = {
   groups: 'Fase de Grupos',
   round32: 'Ronda de 32',
@@ -50,6 +52,7 @@ function formatSlotSub(code) {
 export default function MatchCard({ match, prediction, onSave, readOnly = false }) {
   const [homeScore, setHomeScore] = useState('');
   const [awayScore, setAwayScore] = useState('');
+  const [penaltyWinner, setPenaltyWinner] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -57,28 +60,39 @@ export default function MatchCard({ match, prediction, onSave, readOnly = false 
     if (prediction) {
       setHomeScore(String(prediction.homeScore));
       setAwayScore(String(prediction.awayScore));
+      setPenaltyWinner(prediction.penaltyWinner || '');
     } else {
       setHomeScore('');
       setAwayScore('');
+      setPenaltyWinner('');
     }
   }, [prediction]);
 
+  const isKnockout = KNOCKOUT_PHASES.includes(match.phase);
   const canEdit = !readOnly && match.status === 'pending';
   const homeTeam = match.homeTeam;
   const awayTeam = match.awayTeam;
   const status = STATUS_BADGE[match.status] || STATUS_BADGE.pending;
 
-  const handleSave = async () => {
+  const handleSave = async (pw) => {
     if (homeScore === '' || awayScore === '') return;
     if (!onSave) return;
     setSaving(true);
     try {
-      await onSave(match.id, parseInt(homeScore), parseInt(awayScore));
+      const isDraw = parseInt(homeScore) === parseInt(awayScore);
+      await onSave(match.id, parseInt(homeScore), parseInt(awayScore), isDraw && isKnockout ? pw : null);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleBlurSave = () => handleSave(penaltyWinner);
+
+  const handlePenaltySelect = async (pw) => {
+    setPenaltyWinner(pw);
+    await handleSave(pw);
   };
 
   const handleInput = (setter) => (e) => {
@@ -183,7 +197,7 @@ export default function MatchCard({ match, prediction, onSave, readOnly = false 
                   placeholder="0"
                   value={homeScore}
                   onChange={handleInput(setHomeScore)}
-                  onBlur={handleSave}
+                  onBlur={handleBlurSave}
                   min="0"
                   max="20"
                 />
@@ -194,7 +208,7 @@ export default function MatchCard({ match, prediction, onSave, readOnly = false 
                   placeholder="0"
                   value={awayScore}
                   onChange={handleInput(setAwayScore)}
-                  onBlur={handleSave}
+                  onBlur={handleBlurSave}
                   min="0"
                   max="20"
                 />
@@ -240,6 +254,48 @@ export default function MatchCard({ match, prediction, onSave, readOnly = false 
           )}
         </div>
       </div>
+
+      {/* Penalty winner selector for knockout draw predictions */}
+      {canEdit && isKnockout && homeScore !== '' && awayScore !== '' && homeScore === awayScore && (
+        <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded-xl">
+          <p className="text-xs font-bold text-amber-800 mb-1.5 text-center">⚽ Empate — ¿Quién avanza por penales?</p>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => handlePenaltySelect('home')}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                penaltyWinner === 'home' ? 'bg-wc-blue text-white' : 'bg-white border border-gray-200 text-gray-600'
+              }`}>
+              {match.homeTeam?.name || 'Local'}
+            </button>
+            <button type="button" onClick={() => handlePenaltySelect('away')}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                penaltyWinner === 'away' ? 'bg-wc-blue text-white' : 'bg-white border border-gray-200 text-gray-600'
+              }`}>
+              {match.awayTeam?.name || 'Visitante'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Penalty info for finished knockout matches */}
+      {match.status === 'finished' && match.penaltyWinner && isKnockout && (
+        <div className="mt-2 text-center text-xs">
+          <span className="text-wc-blue font-semibold">
+            ⚽ Avanzó por penales: {match.penaltyWinner === 'home' ? match.homeTeam?.name || 'Local' : match.awayTeam?.name || 'Visitante'}
+          </span>
+          {prediction?.penaltyWinner && (
+            <span className={`ml-1 ${prediction.penaltyWinner === match.penaltyWinner ? 'text-green-600' : 'text-gray-400'}`}>
+              · Pred: {prediction.penaltyWinner === 'home' ? match.homeTeam?.name || 'Local' : match.awayTeam?.name || 'Visitante'}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Penalty info for locked (not yet finished) knockout predictions */}
+      {!canEdit && match.status !== 'finished' && isKnockout && prediction?.penaltyWinner && (
+        <div className="mt-2 text-center text-xs text-gray-400">
+          Penales pred.: {prediction.penaltyWinner === 'home' ? match.homeTeam?.name || 'Local' : match.awayTeam?.name || 'Visitante'}
+        </div>
+      )}
 
       {/* Footer */}
       <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">

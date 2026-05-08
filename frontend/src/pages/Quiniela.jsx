@@ -99,10 +99,10 @@ export default function Quiniela() {
         setChampForm(champRes.data);
       }
 
-      // Progress for group stage
+      // Progress for group stage — total predictions made vs total matches in group
       if (activePhase === 'groups') {
-        const total = matchRes.data.filter(m => m.status === 'pending').length;
-        const done = matchRes.data.filter(m => m.status === 'pending' && predMap[m.id]).length;
+        const total = matchRes.data.length;
+        const done = matchRes.data.filter(m => predMap[m.id]).length;
         setProgress(total > 0 ? Math.round((done / total) * 100) : 100);
       }
     } catch (err) {
@@ -123,9 +123,9 @@ export default function Quiniela() {
       .catch(() => {});
   }, [activePhase]);
 
-  const handleSavePrediction = async (matchId, homeScore, awayScore) => {
+  const handleSavePrediction = async (matchId, homeScore, awayScore, penaltyWinner) => {
     try {
-      const { data } = await api.post('/predictions', { matchId, homeScore, awayScore });
+      const { data } = await api.post('/predictions', { matchId, homeScore, awayScore, penaltyWinner: penaltyWinner || null });
       setPredictions(prev => ({ ...prev, [matchId]: data }));
       // Refresh bracket after saving a knockout prediction (winner may change)
       if (KNOCKOUT_PHASES.includes(activePhase)) {
@@ -154,7 +154,7 @@ export default function Quiniela() {
   };
 
   const pending = matches.filter(m => m.status === 'pending');
-  const predicted = pending.filter(m => predictions[m.id]);
+  const predicted = matches.filter(m => predictions[m.id]);
 
   return (
     <div className="page-container page-enter">
@@ -222,11 +222,11 @@ export default function Quiniela() {
           )}
 
           {/* Progress bar */}
-          {activePhase === 'groups' && pending.length > 0 && (
+          {activePhase === 'groups' && matches.length > 0 && (
             <div className="mb-4">
               <div className="flex justify-between text-xs text-gray-500 mb-1">
                 <span>Progreso Grupo {activeGroup}</span>
-                <span>{predicted.length}/{pending.length} pronósticos</span>
+                <span>{predicted.length}/{matches.length} pronósticos</span>
               </div>
               <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div

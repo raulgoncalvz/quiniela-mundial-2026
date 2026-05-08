@@ -230,27 +230,38 @@ router.put('/:id/result', auth, admin, async (req, res) => {
 
       // Run simulation once per user — used for both team matching AND advancement
       const users = await prisma.user.findMany({ select: { id: true } });
+      const failedUsers = [];
       for (const user of users) {
-        const simulation = await getUserPredictedAdvancement(user.id, prisma);
+        try {
+          const simulation = await getUserPredictedAdvancement(user.id, prisma);
 
-        // Match prediction points: only if both teams match user's predicted bracket slot
-        const pred = predByUser[user.id];
-        if (pred) {
-          let points = 0;
-          if (teamsMatchSimulation(simulation, match)) {
-            points = calculatePoints(hScore, aScore, pred.homeScore, pred.awayScore, cfg.exactScore, cfg.correctResult);
+          // Match prediction points: only if both teams match user's predicted bracket slot
+          const pred = predByUser[user.id];
+          if (pred) {
+            let points = 0;
+            if (teamsMatchSimulation(simulation, match)) {
+              points = calculatePoints(hScore, aScore, pred.homeScore, pred.awayScore, cfg.exactScore, cfg.correctResult);
+            }
+            await prisma.prediction.update({ where: { id: pred.id }, data: { points } });
           }
-          await prisma.prediction.update({ where: { id: pred.id }, data: { points } });
-        }
 
-        // Advancement points: award if user predicted the winner to advance to next round
-        if (nextRound && winnerName && advCfg?.correctResult && simulation[nextRound].has(winnerName)) {
-          await prisma.advancementPrediction.create({
-            data: { userId: user.id, round: nextRound, teamName: winnerName, points: advCfg.correctResult },
-          });
-          advancementUpdated++;
+          // Advancement points: award if user predicted the winner to advance to next round
+          if (nextRound && winnerName && advCfg?.correctResult && simulation[nextRound].has(winnerName)) {
+            await prisma.advancementPrediction.upsert({
+              where: { userId_round_teamName: { userId: user.id, round: nextRound, teamName: winnerName } },
+              update: { points: advCfg.correctResult },
+              create: { userId: user.id, round: nextRound, teamName: winnerName, points: advCfg.correctResult },
+            });
+            advancementUpdated++;
+          }
+        } catch (userErr) {
+          failedUsers.push(user.id);
+          console.error(`Error scoring user ${user.id}:`, userErr);
         }
       }
+      if (failedUsers.length > 0)
+        console.warn(`⚠️ ${failedUsers.length} usuarios no pudieron ser puntuados: ${failedUsers.join(', ')}`);
+
 
       if (advancementUpdated > 0)
         console.log(`🚀 ${winnerName} → ${nextRound}: ${advancementUpdated} usuarios premiados (${advCfg?.correctResult}pts)`);
@@ -279,13 +290,48 @@ router.put('/:id/status', auth, admin, async (req, res) => {
   if (!['pending', 'live', 'finished'].includes(status))
     return res.status(400).json({ error: 'Estado inválido' });
 
+  const matchId = parseInt(req.params.id);
+
   try {
-    const match = await prisma.match.update({
-      where: { id: parseInt(req.params.id) },
-      data: { status },
+    const current = await prisma.match.findUnique({
+      where: { id: matchId },
+      include: { homeTeam: true, awayTeam: true },
     });
+    if (!current) return res.status(404).json({ error: 'Partido no encontrado' });
+
+    const reverting = current.status === 'finished' && status !== 'finished';
+
+    const updateData = { status };
+    if (status === 'pending') {
+      updateData.homeScore = null;
+      updateData.awayScore = null;
+      updateData.penaltyWinner = null;
+    }
+
+    const match = await prisma.match.update({ where: { id: matchId }, data: updateData });
+
+    if (reverting) {
+      // Clear prediction points for this match
+      await prisma.prediction.updateMany({ where: { matchId }, data: { points: 0 } });
+
+      // Clear group position points when a group match is reverted (group no longer complete)
+      if (current.phase === 'groups' && current.group) {
+        await prisma.groupPrediction.updateMany({ where: { group: current.group }, data: { points: 0 } });
+      }
+
+      // Clear advancement predictions for next round based on both teams of this match
+      const NEXT_ROUND_MAP = { round32: 'round16', round16: 'quarters', quarters: 'semis', semis: 'final' };
+      const nextRound = NEXT_ROUND_MAP[current.phase];
+      if (nextRound && current.homeTeam && current.awayTeam) {
+        await prisma.advancementPrediction.deleteMany({
+          where: { round: nextRound, teamName: { in: [current.homeTeam.name, current.awayTeam.name] } },
+        });
+      }
+    }
+
     res.json(match);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Error del servidor' });
   }
 });
