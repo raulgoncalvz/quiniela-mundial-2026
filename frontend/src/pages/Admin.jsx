@@ -40,6 +40,24 @@ export default function Admin() {
   const [creatingUser, setCreatingUser] = useState(false);
   const [deletingUser, setDeletingUser] = useState({});
   const [resetPass, setResetPass] = useState({}); // { [id]: newPassword }
+  const [clearing, setClearing] = useState({});
+
+  const handleClearResult = async (matchId) => {
+    setClearing(prev => ({ ...prev, [matchId]: true }));
+    try {
+      await api.put(`/matches/${matchId}/status`, { status: 'pending' });
+      setMatches(prev => prev.map(m => m.id === matchId
+        ? { ...m, status: 'pending', homeScore: null, awayScore: null, penaltyWinner: null }
+        : m
+      ));
+      setResults(prev => ({ ...prev, [matchId]: { homeScore: '', awayScore: '', penaltyWinner: '', status: 'pending' } }));
+      toast.success('Resultado limpiado');
+    } catch {
+      toast.error('Error al limpiar resultado');
+    } finally {
+      setClearing(prev => ({ ...prev, [matchId]: false }));
+    }
+  };
 
   const loadGroupStandings = async (group) => {
     setLoadingStandings(true);
@@ -744,13 +762,24 @@ export default function Admin() {
                   <span className="text-xs text-gray-400">
                     {new Date(match.date).toLocaleDateString('es-ES', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}
                   </span>
-                  <button
-                    onClick={() => handleSaveResult(match.id)}
-                    disabled={updating[match.id]}
-                    className="btn-primary py-1.5 px-4 text-xs flex items-center gap-1"
-                  >
-                    {updating[match.id] ? <Spinner size="sm" color="white" /> : '💾 Guardar resultado'}
-                  </button>
+                  <div className="flex gap-2">
+                    {(match.homeScore !== null || match.status !== 'pending') && (
+                      <button
+                        onClick={() => handleClearResult(match.id)}
+                        disabled={clearing[match.id]}
+                        className="py-1.5 px-3 text-xs font-semibold rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 flex items-center gap-1"
+                      >
+                        {clearing[match.id] ? <Spinner size="sm" /> : '🗑️ Limpiar'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleSaveResult(match.id)}
+                      disabled={updating[match.id]}
+                      className="btn-primary py-1.5 px-4 text-xs flex items-center gap-1"
+                    >
+                      {updating[match.id] ? <Spinner size="sm" color="white" /> : '💾 Guardar resultado'}
+                    </button>
+                  </div>
                 </div>
               </div>
             );

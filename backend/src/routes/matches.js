@@ -277,6 +277,48 @@ router.put('/:id/result', auth, admin, async (req, res) => {
       }
     }
 
+    // ── Auto-calcular puntos especiales del podio cuando Final (104) o 3er Lugar (103) terminan ──
+    if (finalStatus === 'finished' && [103, 104].includes(match.matchNumber)) {
+      try {
+        const [finalM, thirdM] = await Promise.all([
+          prisma.match.findFirst({ where: { matchNumber: 104, status: 'finished' }, include: { homeTeam: true, awayTeam: true } }),
+          prisma.match.findFirst({ where: { matchNumber: 103, status: 'finished' }, include: { homeTeam: true, awayTeam: true } }),
+        ]);
+
+        const deriveResult = (m) => {
+          if (!m || m.homeScore === null || !m.homeTeam || !m.awayTeam) return { winner: '', loser: '' };
+          if (m.homeScore > m.awayScore) return { winner: m.homeTeam.name, loser: m.awayTeam.name };
+          if (m.homeScore < m.awayScore) return { winner: m.awayTeam.name, loser: m.homeTeam.name };
+          return m.penaltyWinner === 'away'
+            ? { winner: m.awayTeam.name, loser: m.homeTeam.name }
+            : { winner: m.homeTeam.name, loser: m.awayTeam.name };
+        };
+
+        const { winner: champion, loser: runnerUp } = deriveResult(finalM);
+        const { winner: third } = deriveResult(thirdM);
+
+        if (champion) {
+          const cfgList = await prisma.scoringConfig.findMany({
+            where: { phase: { in: ['bet_champion', 'bet_runnerUp', 'bet_third'] } },
+          });
+          const cfg = {};
+          for (const c of cfgList) cfg[c.phase] = c.exactScore;
+
+          const champPreds = await prisma.championPrediction.findMany();
+          for (const pred of champPreds) {
+            const podioPoints =
+              (pred.champion && pred.champion === champion ? (cfg.bet_champion || 15) : 0) +
+              (pred.runnerUp && pred.runnerUp === runnerUp ? (cfg.bet_runnerUp || 10) : 0) +
+              (third && pred.third === third            ? (cfg.bet_third    ||  5) : 0);
+            await prisma.championPrediction.update({ where: { id: pred.id }, data: { points: podioPoints } });
+          }
+          console.log(`🏆 Puntos del podio calculados — Campeón: ${champion}, Finalista: ${runnerUp}, 3ro: ${third || 'pendiente'}`);
+        }
+      } catch (champErr) {
+        console.error('Error auto-calculando puntos especiales:', champErr);
+      }
+    }
+
     res.json({ match, updated: predictions.length, groupPointsUpdated, advancementUpdated });
   } catch (err) {
     console.error(err);

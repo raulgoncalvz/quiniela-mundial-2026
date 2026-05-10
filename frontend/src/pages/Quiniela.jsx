@@ -123,6 +123,38 @@ export default function Quiniela() {
       .catch(() => {});
   }, [activePhase]);
 
+  // Auto-derive champion/runner-up/third from bracket predictions
+  useEffect(() => {
+    if (activePhase !== 'final' && activePhase !== 'third') return;
+    if (matches.length === 0) return;
+
+    for (const match of matches) {
+      const pred = predictions[match.id];
+      if (!pred || pred.homeScore === null || pred.awayScore === null) continue;
+
+      const bt = bracketTeams[match.id];
+      const homeTeam = bt?.home?.name || match.homeTeam?.name;
+      const awayTeam = bt?.away?.name || match.awayTeam?.name;
+      if (!homeTeam || !awayTeam) continue;
+
+      let winnerName, loserName;
+      if (pred.homeScore > pred.awayScore) {
+        winnerName = homeTeam; loserName = awayTeam;
+      } else if (pred.homeScore < pred.awayScore) {
+        winnerName = awayTeam; loserName = homeTeam;
+      } else {
+        winnerName = pred.penaltyWinner === 'away' ? awayTeam : homeTeam;
+        loserName  = pred.penaltyWinner === 'away' ? homeTeam : awayTeam;
+      }
+
+      if (activePhase === 'final') {
+        setChampForm(f => ({ ...f, champion: winnerName, runnerUp: loserName }));
+      } else {
+        setChampForm(f => ({ ...f, third: winnerName }));
+      }
+    }
+  }, [predictions, bracketTeams, matches, activePhase]);
+
   const handleSavePrediction = async (matchId, homeScore, awayScore, penaltyWinner) => {
     try {
       const { data } = await api.post('/predictions', { matchId, homeScore, awayScore, penaltyWinner: penaltyWinner || null });
@@ -477,7 +509,8 @@ export default function Quiniela() {
 
               {/* Podio */}
               <div>
-                <p className="text-xs font-bold text-gray-600 mb-2">🏆 Podio Final</p>
+                <p className="text-xs font-bold text-gray-600 mb-1">🏆 Podio Final</p>
+                <p className="text-xs text-gray-400 mb-2">Se completa automáticamente según tu bracket (Final y 3er Lugar)</p>
                 <div className="grid grid-cols-3 gap-3">
                   {[
                     { key: 'champion', label: '🥇 Campeón' },
@@ -486,14 +519,13 @@ export default function Quiniela() {
                   ].map(({ key, label }) => (
                     <div key={key}>
                       <label className="text-xs font-bold text-gray-500 block mb-1">{label}</label>
-                      <select
-                        value={champForm[key]}
-                        onChange={e => setChampForm(f => ({ ...f, [key]: e.target.value }))}
-                        className="w-full text-xs rounded-xl border border-gray-200 py-2 px-2 focus:ring-2 focus:ring-wc-blue outline-none bg-wc-light-bg"
-                      >
-                        <option value="">—</option>
-                        {TEAMS_LIST.map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
+                      <div className={`w-full text-xs rounded-xl border py-2 px-2 ${
+                        champForm[key]
+                          ? 'border-wc-blue bg-blue-50 text-wc-dark font-semibold'
+                          : 'border-gray-200 bg-gray-50 text-gray-400'
+                      }`}>
+                        {champForm[key] || '—'}
+                      </div>
                     </div>
                   ))}
                 </div>
