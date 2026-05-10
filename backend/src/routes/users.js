@@ -47,8 +47,8 @@ router.post('/', auth, admin, async (req, res) => {
 
     res.status(201).json(user);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error del servidor' });
+    console.error('CREATE USER ERROR:', err);
+    res.status(500).json({ error: err.message || 'Error del servidor' });
   }
 });
 
