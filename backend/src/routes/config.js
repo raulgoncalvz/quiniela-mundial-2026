@@ -46,10 +46,38 @@ router.get('/scoring/current', async (req, res) => {
       quarters: 'Cuartos de Final', semis: 'Semifinales', third: 'Tercer Lugar', final: 'Final',
     };
 
+    // Phase → which advancement bet is earned by winning matches in this phase
+    const ADVANCEMENT_BET = {
+      round32: 'bet_round16',
+      round16: 'bet_quarters',
+      quarters: 'bet_semis',
+      semis:    'bet_final',
+    };
+
     let cfg = await prisma.scoringConfig.findUnique({ where: { phase } });
     if (!cfg) cfg = { phase, label: PHASE_LABELS[phase] || phase, exactScore: 3, correctResult: 1 };
 
-    res.json({ phase, label: PHASE_LABELS[phase] || cfg.label, exactScore: cfg.exactScore, correctResult: cfg.correctResult });
+    let advancementLabel = null;
+    let advancementPoints = null;
+    const advPhaseKey = ADVANCEMENT_BET[phase];
+    if (advPhaseKey) {
+      let advCfg = await prisma.scoringConfig.findUnique({ where: { phase: advPhaseKey } });
+      if (!advCfg) advCfg = DEFAULT_CONFIGS.find(c => c.phase === advPhaseKey);
+      if (advCfg) {
+        advancementPoints = advCfg.correctResult;
+        advancementLabel = advCfg.label.replace(/^🚀 /, '');
+      }
+    }
+
+    res.json({
+      phase,
+      label: PHASE_LABELS[phase] || cfg.label,
+      exactScore: cfg.exactScore,
+      correctResult: cfg.correctResult,
+      advancementLabel,
+      advancementPoints,
+      groupPositionPoints: phase === 'groups' ? 2 : null,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error del servidor' });

@@ -218,14 +218,18 @@ export default function Ranking() {
               +{currentScoring?.correctResult ?? '—'} pt{currentScoring?.correctResult !== 1 ? 's' : ''}
             </span>
           </div>
-          <div className="flex justify-between">
-            <span>📊 Posición de grupo exacta</span>
-            <span className="font-bold text-green-600">+2 pts</span>
-          </div>
-          <div className="flex justify-between">
-            <span>🚀 Equipo avanza a R16/QF/SF/Final</span>
-            <span className="font-bold text-purple-600">+3/3/4/5 pts</span>
-          </div>
+          {currentScoring?.groupPositionPoints != null && (
+            <div className="flex justify-between">
+              <span>📊 Posición de grupo exacta (×4)</span>
+              <span className="font-bold text-green-600">+{currentScoring.groupPositionPoints} pts c/u</span>
+            </div>
+          )}
+          {currentScoring?.advancementPoints != null && (
+            <div className="flex justify-between">
+              <span>🚀 {currentScoring.advancementLabel}</span>
+              <span className="font-bold text-purple-600">+{currentScoring.advancementPoints} pts</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span>✗ Resultado errado</span>
             <span className="font-bold text-gray-400">0 pts</span>
