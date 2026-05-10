@@ -41,6 +41,30 @@ export default function Admin() {
   const [deletingUser, setDeletingUser] = useState({});
   const [resetPass, setResetPass] = useState({}); // { [id]: newPassword }
   const [clearing, setClearing] = useState({});
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const res = await api.get('/export/excel', { responseType: 'blob' });
+      const blob = new Blob([res.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Quiniela Mundial FIFA 2026 - Pronósticos Oficiales.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success('✅ Excel generado correctamente');
+    } catch {
+      toast.error('Error al generar el Excel');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const toSlug = (str) =>
     str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -580,13 +604,13 @@ export default function Admin() {
               Genera un Excel protegido con todos los pronósticos, posiciones y apuestas especiales de cada participante.
               Ideal para compartir con todos y verificar que no hay cambios.
             </p>
-            <a
-              href="/api/export/excel"
-              download
-              className="w-full py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-sm transition-all flex items-center justify-center gap-2"
+            <button
+              onClick={handleExportExcel}
+              disabled={exporting}
+              className="w-full py-2.5 rounded-xl bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-bold text-sm transition-all flex items-center justify-center gap-2"
             >
-              📥 Descargar Excel de Pronósticos
-            </a>
+              {exporting ? <Spinner size="sm" color="white" /> : '📥 Descargar Excel de Pronósticos'}
+            </button>
           </div>
 
           {/* Crear usuario */}
