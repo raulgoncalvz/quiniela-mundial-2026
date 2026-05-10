@@ -128,16 +128,16 @@ router.get('/excel', auth, admin, async (req, res) => {
       return { ...u, myPreds, hasChamp, hasGroups, total, pct };
     }).sort((a, b) => b.myPreds - a.myPreds);
 
-    // ── Bracket simulado por usuario (para equipos en eliminatorias) ──
+    // ── Bracket simulado por usuario en paralelo ─────────────────────
+    const bracketResults = await Promise.all(
+      users.map(u =>
+        getUserPredictedAdvancement(u.id, prisma)
+          .then(sim => ({ id: u.id, teams: sim.matchTeams || {} }))
+          .catch(() => ({ id: u.id, teams: {} }))
+      )
+    );
     const userBrackets = {};
-    for (const u of users) {
-      try {
-        const sim = await getUserPredictedAdvancement(u.id, prisma);
-        userBrackets[u.id] = sim.matchTeams || {};
-      } catch (e) {
-        userBrackets[u.id] = {};
-      }
-    }
+    for (const r of bracketResults) userBrackets[r.id] = r.teams;
 
     // ── 2. Workbook ───────────────────────────────────────────────────
     const wb = new ExcelJS.Workbook();

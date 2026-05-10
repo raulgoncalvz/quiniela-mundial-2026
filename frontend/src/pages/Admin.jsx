@@ -46,7 +46,7 @@ export default function Admin() {
   const handleExportExcel = async () => {
     setExporting(true);
     try {
-      const res = await api.get('/export/excel', { responseType: 'blob' });
+      const res = await api.get('/export/excel', { responseType: 'blob', timeout: 120000 });
       const blob = new Blob([res.data], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       });
