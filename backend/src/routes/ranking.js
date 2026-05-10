@@ -7,6 +7,7 @@ const prisma = new PrismaClient();
 router.get('/', async (req, res) => {
   try {
     const users = await prisma.user.findMany({
+      where: { role: { not: 'admin' } },
       include: {
         predictions: {
           select: {
