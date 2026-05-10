@@ -49,7 +49,7 @@ function formatSlotSub(code) {
   return null;
 }
 
-export default function MatchCard({ match, prediction, onSave, readOnly = false }) {
+export default function MatchCard({ match, prediction, onSave, readOnly = false, liveMinute }) {
   const [homeScore, setHomeScore] = useState('');
   const [awayScore, setAwayScore] = useState('');
   const [penaltyWinner, setPenaltyWinner] = useState('');
@@ -182,6 +182,37 @@ export default function MatchCard({ match, prediction, onSave, readOnly = false 
                   <span className="text-wc-dark font-bold text-lg">:</span>
                   <span className="w-10 h-10 flex items-center justify-center text-lg font-black bg-wc-blue text-white rounded-xl">
                     {match.awayScore}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : match.status === 'live' ? (
+            /* Live score */
+            <div className="flex items-center gap-2">
+              <div className="flex flex-col items-center">
+                <span className="text-xs text-gray-400 mb-1">Tu pred.</span>
+                <div className="flex items-center gap-1">
+                  <span className="w-8 h-8 flex items-center justify-center text-sm font-bold bg-wc-light-bg rounded-lg text-gray-500">
+                    {prediction?.homeScore ?? '–'}
+                  </span>
+                  <span className="text-gray-300">:</span>
+                  <span className="w-8 h-8 flex items-center justify-center text-sm font-bold bg-wc-light-bg rounded-lg text-gray-500">
+                    {prediction?.awayScore ?? '–'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex flex-col items-center">
+                <span className="text-xs font-bold text-red-500 mb-1 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse inline-block" />
+                  {liveMinute != null ? `${liveMinute}'` : 'EN VIVO'}
+                </span>
+                <div className="flex items-center gap-1">
+                  <span className="w-10 h-10 flex items-center justify-center text-lg font-black bg-red-500 text-white rounded-xl">
+                    {match.homeScore ?? 0}
+                  </span>
+                  <span className="text-wc-dark font-bold text-lg">:</span>
+                  <span className="w-10 h-10 flex items-center justify-center text-lg font-black bg-red-500 text-white rounded-xl">
+                    {match.awayScore ?? 0}
                   </span>
                 </div>
               </div>

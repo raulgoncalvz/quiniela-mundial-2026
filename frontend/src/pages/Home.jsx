@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import api from '../lib/axios';
 import Spinner from '../components/Spinner';
 import MatchCard from '../components/MatchCard';
+import { useLiveMatches } from '../hooks/useLiveMatches';
 
 function StatCard({ value, label, icon, color = 'blue' }) {
   const colors = {
@@ -31,6 +32,8 @@ export default function Home() {
   const [myRank, setMyRank] = useState(null);
 
   const [predMap, setPredMap] = useState({});
+  const [liveMatches, setLiveMatches] = useState([]);
+  const liveData = useLiveMatches();
 
   useEffect(() => {
     Promise.all([
@@ -39,11 +42,13 @@ export default function Home() {
       api.get('/ranking'),
       api.get('/predictions/stats'),
       api.get('/predictions'),
-    ]).then(([up, re, rk, st, preds]) => {
+      api.get('/matches?status=live'),
+    ]).then(([up, re, rk, st, preds, live]) => {
       setUpcoming(up.data);
       setRecent(re.data);
       setRanking(rk.data.slice(0, 3));
       setStats(st.data);
+      setLiveMatches(live.data);
       const me = rk.data.find(u => Number(u.id) === Number(user.id));
       setMyRank(me);
       const map = {};
@@ -52,6 +57,23 @@ export default function Home() {
     }).catch(console.error)
       .finally(() => setLoading(false));
   }, [user.id]);
+
+  // Sync SSE live updates into liveMatches state
+  useEffect(() => {
+    if (!Object.keys(liveData).length) return;
+    setLiveMatches(prev => {
+      // Add new live matches that aren't in the list yet
+      const updated = prev.map(m => {
+        const d = liveData[m.id];
+        return d ? { ...m, status: d.status, homeScore: d.homeScore, awayScore: d.awayScore } : m;
+      });
+      // Remove matches that transitioned out of 'live'
+      return updated.filter(m => {
+        const d = liveData[m.id];
+        return !d || d.status === 'live';
+      });
+    });
+  }, [liveData]);
 
   if (loading) {
     return (
@@ -141,6 +163,33 @@ export default function Home() {
                   </div>
                   <span className="text-lg font-black text-wc-blue">{u.totalPoints} pts</span>
                 </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* EN VIVO section */}
+      {liveMatches.length > 0 && (
+        <section className="mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+            <h2 className="section-title text-red-600">EN VIVO</h2>
+          </div>
+          <div className="space-y-3">
+            {liveMatches.map(match => {
+              const live = liveData[match.id];
+              const displayMatch = live
+                ? { ...match, status: live.status, homeScore: live.homeScore, awayScore: live.awayScore }
+                : match;
+              return (
+                <MatchCard
+                  key={match.id}
+                  match={displayMatch}
+                  prediction={predMap[match.id]}
+                  readOnly
+                  liveMinute={live?.minute}
+                />
               );
             })}
           </div>

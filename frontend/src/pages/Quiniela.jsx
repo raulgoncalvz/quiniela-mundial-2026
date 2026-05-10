@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast';
 import api from '../lib/axios';
 import MatchCard from '../components/MatchCard';
 import Spinner from '../components/Spinner';
+import { useLiveMatches } from '../hooks/useLiveMatches';
 
 const KNOCKOUT_PHASES = ['round32','round16','quarters','semis','third','final'];
 
@@ -44,6 +45,7 @@ export default function Quiniela() {
   const [thirds, setThirds] = useState(null);
   const [thirdsLoading, setThirdsLoading] = useState(false);
   const [lockInfo, setLockInfo] = useState(null);
+  const liveData = useLiveMatches();
 
   // Fetch lock status on mount
   useEffect(() => {
@@ -485,17 +487,26 @@ export default function Quiniela() {
             <div className="space-y-3">
               {matches.map(match => {
                 const bt = bracketTeams[match.id];
-                const enriched = bt ? {
-                  ...match,
-                  homeTeam: bt.home ? { name: bt.home.name, flag: bt.home.flag } : match.homeTeam,
-                  awayTeam: bt.away ? { name: bt.away.name, flag: bt.away.flag } : match.awayTeam,
-                } : match;
+                const live = liveData[match.id];
+                const enriched = {
+                  ...(bt ? {
+                    ...match,
+                    homeTeam: bt.home ? { name: bt.home.name, flag: bt.home.flag } : match.homeTeam,
+                    awayTeam: bt.away ? { name: bt.away.name, flag: bt.away.flag } : match.awayTeam,
+                  } : match),
+                  ...(live ? {
+                    status:    live.status,
+                    homeScore: live.homeScore,
+                    awayScore: live.awayScore,
+                  } : {}),
+                };
                 return (
                   <MatchCard
                     key={match.id}
                     match={enriched}
                     prediction={predictions[match.id]}
                     onSave={handleSavePrediction}
+                    liveMinute={live?.minute}
                   />
                 );
               })}

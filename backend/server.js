@@ -67,4 +67,5 @@ app.listen(PORT, () => {
   console.log(`\n🌍 Quiniela Mundial 2026 API`);
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📊 Health: http://localhost:${PORT}/health\n`);
+  require('./src/services/liveMatchService').start();
 });

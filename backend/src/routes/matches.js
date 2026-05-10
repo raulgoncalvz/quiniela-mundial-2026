@@ -4,8 +4,33 @@ const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
 const { calculateGroupStandings, calculatePredictedStandings, awardGroupPositionPoints } = require('../utils/groupScoring');
 const { getUserPredictedAdvancement } = require('../utils/bracketSimulation');
+const liveService = require('../services/liveMatchService');
 
 const prisma = new PrismaClient();
+
+// ── SSE: live match updates ────────────────────────────────────────
+router.get('/live/stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  res.write(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
+
+  const heartbeat = setInterval(() => {
+    try { res.write(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`); }
+    catch { clearInterval(heartbeat); }
+  }, 30_000);
+
+  liveService.addClient(res);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    liveService.removeClient(res);
+  });
+});
+// ──────────────────────────────────────────────────────────────────
 
 function calculatePoints(actualHome, actualAway, predHome, predAway, exactScore = 3, correctResult = 1) {
   if (predHome === actualHome && predAway === actualAway) return exactScore;
