@@ -572,6 +572,23 @@ export default function Admin() {
       {/* ── Usuarios ── */}
       {phase === 'users' && (
         <div className="space-y-4">
+
+          {/* Exportar Excel */}
+          <div className="card border border-green-200 bg-green-50">
+            <h3 className="font-bold text-green-900 mb-1">📊 Exportar Quiniela Completa</h3>
+            <p className="text-xs text-green-700 mb-3">
+              Genera un Excel protegido con todos los pronósticos, posiciones y apuestas especiales de cada participante.
+              Ideal para compartir con todos y verificar que no hay cambios.
+            </p>
+            <a
+              href="/api/export/excel"
+              download
+              className="w-full py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-sm transition-all flex items-center justify-center gap-2"
+            >
+              📥 Descargar Excel de Pronósticos
+            </a>
+          </div>
+
           {/* Crear usuario */}
           <div className="card">
             <h3 className="font-bold text-wc-dark mb-1">➕ Crear Usuario</h3>
