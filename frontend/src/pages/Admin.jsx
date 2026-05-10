@@ -42,6 +42,20 @@ export default function Admin() {
   const [resetPass, setResetPass] = useState({}); // { [id]: newPassword }
   const [clearing, setClearing] = useState({});
 
+  const toSlug = (str) =>
+    str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  const generatePassword = () => String(Math.floor(100000 + Math.random() * 900000));
+
+  const generateFromName = (name) => {
+    const parts = name.trim().split(/\s+/);
+    const username = parts.length >= 2
+      ? toSlug(parts[0]) + toSlug(parts[1])
+      : toSlug(parts[0]);
+    const password = generatePassword();
+    setNewUser(f => ({ ...f, username, password }));
+  };
+
   const handleClearResult = async (matchId) => {
     setClearing(prev => ({ ...prev, [matchId]: true }));
     try {
@@ -564,15 +578,25 @@ export default function Admin() {
             <p className="text-xs text-gray-400 mb-3">El usuario inicia sesión con su nombre de usuario y contraseña (sin email)</p>
             <form onSubmit={handleCreateUser} className="space-y-3">
               <div>
-                <label className="text-xs font-bold text-gray-600 block mb-1">Nombre (visible en ranking)</label>
-                <input
-                  type="text"
-                  placeholder="Ej: Juan García"
-                  value={newUser.name}
-                  onChange={e => setNewUser(f => ({ ...f, name: e.target.value }))}
-                  className="input-field text-sm py-2"
-                  required
-                />
+                <label className="text-xs font-bold text-gray-600 block mb-1">Nombre completo (visible en ranking)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Ej: Juan García"
+                    value={newUser.name}
+                    onChange={e => setNewUser(f => ({ ...f, name: e.target.value }))}
+                    className="input-field text-sm py-2 flex-1"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => generateFromName(newUser.name)}
+                    disabled={!newUser.name.trim()}
+                    className="px-3 py-2 rounded-xl bg-wc-blue text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                  >
+                    🎲 Generar
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="text-xs font-bold text-gray-600 block mb-1">Usuario (para iniciar sesión)</label>
@@ -580,22 +604,31 @@ export default function Admin() {
                   type="text"
                   placeholder="Ej: juangarcia"
                   value={newUser.username}
-                  onChange={e => setNewUser(f => ({ ...f, username: e.target.value.toLowerCase().replace(/\s+/g,'_') }))}
+                  onChange={e => setNewUser(f => ({ ...f, username: e.target.value.toLowerCase().replace(/\s+/g,'') }))}
                   className="input-field text-sm py-2"
                   required
                 />
               </div>
               <div>
                 <label className="text-xs font-bold text-gray-600 block mb-1">Contraseña</label>
-                <input
-                  type="text"
-                  placeholder="Mínimo 4 caracteres"
-                  value={newUser.password}
-                  onChange={e => setNewUser(f => ({ ...f, password: e.target.value }))}
-                  className="input-field text-sm py-2"
-                  required
-                  minLength={4}
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="6 dígitos"
+                    value={newUser.password}
+                    onChange={e => setNewUser(f => ({ ...f, password: e.target.value }))}
+                    className="input-field text-sm py-2 flex-1 font-mono tracking-widest"
+                    required
+                    minLength={4}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setNewUser(f => ({ ...f, password: generatePassword() }))}
+                    className="px-3 py-2 rounded-xl border border-gray-200 text-gray-500 text-xs font-bold hover:bg-gray-50 flex-shrink-0"
+                  >
+                    🎲
+                  </button>
+                </div>
               </div>
               <button type="submit" disabled={creatingUser} className="btn-primary w-full flex items-center justify-center gap-2">
                 {creatingUser ? <Spinner size="sm" color="white" /> : '👤 Crear Usuario'}
