@@ -39,6 +39,7 @@ router.post('/', auth, admin, async (req, res) => {
       data: {
         name: name.trim(),
         username: cleanUsername,
+        email: `${cleanUsername}@quiniela.local`,
         password: hashed,
         role: role === 'admin' ? 'admin' : 'user',
       },
@@ -47,8 +48,8 @@ router.post('/', auth, admin, async (req, res) => {
 
     res.status(201).json(user);
   } catch (err) {
-    console.error('CREATE USER ERROR:', err);
-    res.status(500).json({ error: err.message || 'Error del servidor' });
+    console.error(err);
+    res.status(500).json({ error: 'Error del servidor' });
   }
 });
 
