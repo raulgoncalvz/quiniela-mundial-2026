@@ -1,37 +1,8 @@
 require('dotenv').config();
-const { execSync } = require('child_process');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-
-// ── Seed + fixes de datos en cada arranque ───────────────────────
-try {
-  execSync('node prisma/seed.js', { stdio: 'inherit' });
-} catch (err) {
-  console.error('⚠️  Error en seed:', err.message);
-}
-try {
-  execSync('node scripts/fix-dates.js', { stdio: 'inherit' });
-} catch (err) {
-  console.error('⚠️  Error en fix-dates:', err.message);
-}
-try {
-  execSync('node scripts/fix-home-away.js', { stdio: 'inherit' });
-} catch (err) {
-  console.error('⚠️  Error en fix-home-away:', err.message);
-}
-try {
-  execSync('node scripts/fix-labels.js', { stdio: 'inherit' });
-} catch (err) {
-  console.error('⚠️  Error en fix-labels:', err.message);
-}
-try {
-  execSync('node scripts/init-scoring.js', { stdio: 'inherit' });
-} catch (err) {
-  console.error('⚠️  Error en init-scoring:', err.message);
-}
-// ─────────────────────────────────────────────────────────────────
 
 const app = express();
 const PORT = process.env.PORT || 3001;
