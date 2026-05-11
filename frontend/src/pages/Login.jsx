@@ -30,16 +30,8 @@ export default function Login() {
         src="/mundial-2026-cartel.jpg"
         alt="Mundial 2026"
         className="w-full object-cover"
-        style={{ maxHeight: '260px', objectPosition: 'center top' }}
+        style={{ maxHeight: '300px', objectPosition: 'center top' }}
       />
-
-      {/* Hero */}
-      <div className="bg-wc-gradient flex flex-col items-center justify-center py-10 px-6 text-white text-center">
-        <div className="text-5xl mb-3">🏆</div>
-        <h1 className="text-3xl font-black tracking-tight mb-1">QUINIELA</h1>
-        <p className="text-xl font-bold opacity-90">MUNDIAL 2026</p>
-        <p className="text-sm opacity-70 mt-2">USA · Canadá · México</p>
-      </div>
 
       {/* Form */}
       <div className="flex-1 bg-white rounded-t-3xl -mt-6 px-6 pt-8 pb-12">
