@@ -10,7 +10,7 @@ const prisma = new PrismaClient();
 router.get('/', auth, admin, async (req, res) => {
   try {
     const users = await prisma.user.findMany({
-      select: { id: true, name: true, username: true, email: true, role: true, createdAt: true },
+      select: { id: true, name: true, username: true, email: true, role: true, createdAt: true, plainPassword: true },
       orderBy: { createdAt: 'asc' },
     });
     res.json(users);
@@ -41,9 +41,10 @@ router.post('/', auth, admin, async (req, res) => {
         username: cleanUsername,
         email: `${cleanUsername}@quiniela.local`,
         password: hashed,
+        plainPassword: password,
         role: role === 'admin' ? 'admin' : 'user',
       },
-      select: { id: true, name: true, username: true, email: true, role: true, createdAt: true },
+      select: { id: true, name: true, username: true, email: true, role: true, createdAt: true, plainPassword: true },
     });
 
     res.status(201).json(user);
@@ -65,6 +66,7 @@ router.put('/:id', auth, admin, async (req, res) => {
       if (password.length < 4)
         return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
       updateData.password = await bcrypt.hash(password, 12);
+      updateData.plainPassword = password;
     }
 
     if (Object.keys(updateData).length === 0)
@@ -73,7 +75,7 @@ router.put('/:id', auth, admin, async (req, res) => {
     const user = await prisma.user.update({
       where: { id: userId },
       data: updateData,
-      select: { id: true, name: true, username: true, email: true, role: true },
+      select: { id: true, name: true, username: true, email: true, role: true, plainPassword: true },
     });
 
     res.json(user);
