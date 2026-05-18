@@ -509,10 +509,10 @@ export default function Admin() {
             </button>
           </div>
 
-          {/* Puntos por apuestas especiales */}
+          {/* Puntos por apuestas especiales (campeón, goleador, etc.) */}
           <div className="card">
             <h3 className="font-bold text-wc-dark mb-1">🏆 Puntos por Apuestas Especiales</h3>
-            <p className="text-xs text-gray-400 mb-3">Puntos al acertar cada apuesta especial</p>
+            <p className="text-xs text-gray-400 mb-3">Puntos al acertar cada apuesta especial del torneo (campeón, goleador, etc.)</p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -522,13 +522,50 @@ export default function Admin() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {scoringConfigs.filter(c => c.phase.startsWith('bet_')).map(cfg => (
+                  {scoringConfigs
+                    .filter(c => ['bet_champion','bet_runnerUp','bet_third','bet_topScorer','bet_bestPlayer','bet_goalkeeper'].includes(c.phase))
+                    .map(cfg => (
                     <tr key={cfg.phase}>
                       <td className="py-2 font-medium text-wc-dark">{cfg.label || cfg.phase}</td>
                       <td className="py-2 text-center">
                         <input type="number" min="1" max="50" value={cfg.exactScore}
                           onChange={e => handleScoringChange(cfg.phase, 'exactScore', parseInt(e.target.value) || 0)}
                           className="w-14 text-center text-sm rounded-xl border border-gray-200 py-1 px-2 focus:ring-2 focus:ring-wc-red outline-none bg-wc-light-bg font-bold text-wc-red"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <button onClick={handleSaveScoring} disabled={savingScoring}
+              className="btn-primary w-full mt-4 flex items-center justify-center gap-2">
+              {savingScoring ? <Spinner size="sm" color="white" /> : '💾 Guardar Configuración'}
+            </button>
+          </div>
+
+          {/* Puntos por avance de ronda */}
+          <div className="card">
+            <h3 className="font-bold text-wc-dark mb-1">🚀 Puntos por Avance de Ronda</h3>
+            <p className="text-xs text-gray-400 mb-3">Puntos por cada equipo que aciertes que avanza a cada ronda eliminatoria</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-gray-500 border-b border-gray-100">
+                    <th className="text-left py-2 font-semibold">Ronda</th>
+                    <th className="text-center py-2 font-semibold">🎯 Pts / equipo</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {scoringConfigs
+                    .filter(c => ['bet_round16','bet_quarters','bet_semis','bet_final'].includes(c.phase))
+                    .map(cfg => (
+                    <tr key={cfg.phase}>
+                      <td className="py-2 font-medium text-wc-dark">{cfg.label || cfg.phase}</td>
+                      <td className="py-2 text-center">
+                        <input type="number" min="1" max="20" value={cfg.correctResult}
+                          onChange={e => handleScoringChange(cfg.phase, 'correctResult', parseInt(e.target.value) || 0)}
+                          className="w-14 text-center text-sm rounded-xl border border-gray-200 py-1 px-2 focus:ring-2 focus:ring-wc-blue outline-none bg-wc-light-bg font-bold text-wc-blue"
                         />
                       </td>
                     </tr>
