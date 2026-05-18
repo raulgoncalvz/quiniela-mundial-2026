@@ -40,6 +40,7 @@ export default function Admin() {
   const [creatingUser, setCreatingUser] = useState(false);
   const [deletingUser, setDeletingUser] = useState({});
   const [resetPass, setResetPass] = useState({}); // { [id]: newPassword }
+  const [knownPasswords, setKnownPasswords] = useState({}); // { [id]: plaintext } — solo sesión actual
   const [clearing, setClearing] = useState({});
   const [exporting, setExporting] = useState(false);
 
@@ -234,8 +235,10 @@ export default function Admin() {
     if (!newUser.name || !newUser.username || !newUser.password) return;
     setCreatingUser(true);
     try {
+      const plainPass = newUser.password;
       const { data } = await api.post('/users', newUser);
       setUsers(prev => [...prev, data]);
+      setKnownPasswords(prev => ({ ...prev, [data.id]: plainPass }));
       setNewUser({ name: '', username: '', password: '' });
       toast.success(`✅ Usuario "${data.username}" creado`);
     } catch (err) {
@@ -264,6 +267,7 @@ export default function Admin() {
     if (!pass || pass.length < 4) { toast.error('Mínimo 4 caracteres'); return; }
     try {
       await api.put(`/users/${id}`, { password: pass });
+      setKnownPasswords(prev => ({ ...prev, [id]: pass }));
       setResetPass(prev => ({ ...prev, [id]: '' }));
       toast.success('Contraseña actualizada');
     } catch (err) {
@@ -691,9 +695,20 @@ export default function Admin() {
                         <p className="font-bold text-wc-dark text-sm">{u.name}</p>
                         <p className="text-xs text-gray-500">
                           @{u.username || '—'}
-                          {u.email && <span className="ml-1 text-gray-400">· {u.email}</span>}
                           {u.role === 'admin' && <span className="ml-1 text-amber-600 font-bold">· Admin</span>}
                         </p>
+                        {knownPasswords[u.id] && (
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span className="text-xs font-mono bg-gray-100 text-gray-700 px-2 py-0.5 rounded-lg tracking-widest">
+                              🔑 {knownPasswords[u.id]}
+                            </span>
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(knownPasswords[u.id]); toast.success('Contraseña copiada'); }}
+                              className="text-xs text-gray-400 hover:text-gray-600"
+                              title="Copiar contraseña"
+                            >📋</button>
+                          </div>
+                        )}
                       </div>
                       {u.role !== 'admin' && (
                         <button
