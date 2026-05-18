@@ -8,8 +8,20 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(helmet());
+
+// CORS — acepta múltiples orígenes separados por coma en FRONTEND_URL
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
+  .split(',')
+  .map(o => o.trim().replace(/\/$/, ''))
+  .filter(Boolean);
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true); // mobile apps / curl / same-origin
+    const clean = origin.replace(/\/$/, '');
+    if (allowedOrigins.includes(clean)) return cb(null, true);
+    return cb(new Error(`CORS: origin ${origin} no permitido`));
+  },
   credentials: true,
 }));
 app.use(express.json());

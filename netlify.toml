@@ -3,6 +3,9 @@
   command = "npm run build"
   publish = "dist"
 
+[build.environment]
+  VITE_API_URL = "https://quiniela-mundial-2026.onrender.com/api"
+
 [[redirects]]
   from   = "/*"
   to     = "/index.html"
