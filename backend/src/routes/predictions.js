@@ -1,10 +1,8 @@
 const router = require('express').Router();
-const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
 const THIRD_PLACE_COMBINATIONS = require('../combinaciones.json');
 const { sortByFifaRules } = require('../utils/groupScoring');
-
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 async function isLocked() {
   try {

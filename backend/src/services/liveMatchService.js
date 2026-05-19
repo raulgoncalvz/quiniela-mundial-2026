@@ -1,9 +1,7 @@
 'use strict';
 const https = require('https');
-const { PrismaClient } = require('@prisma/client');
 const { finalizeMatch } = require('./matchFinalizer');
-
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 const API_KEY = process.env.FOOTBALL_API_KEY || '';
 const POLL_MS = 60_000;
 

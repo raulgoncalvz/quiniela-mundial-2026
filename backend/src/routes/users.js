@@ -1,10 +1,8 @@
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
-const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
-
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 // GET /api/users — list all users (admin)
 router.get('/', auth, admin, async (req, res) => {

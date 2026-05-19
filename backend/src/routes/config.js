@@ -1,11 +1,9 @@
 const router = require('express').Router();
-const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
 const { calculateGroupStandings, awardGroupPositionPoints } = require('../utils/groupScoring');
 const { getUserPredictedAdvancement } = require('../utils/bracketSimulation');
-
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 const DEFAULT_CONFIGS = [
   { phase: 'groups',         label: 'Fase de Grupos',      exactScore: 3,  correctResult: 1 },

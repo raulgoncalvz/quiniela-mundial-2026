@@ -1,9 +1,7 @@
 'use strict';
-const { PrismaClient } = require('@prisma/client');
 const { awardGroupPositionPoints } = require('../utils/groupScoring');
 const { getUserPredictedAdvancement } = require('../utils/bracketSimulation');
-
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 const KNOCKOUT_PHASES = new Set(['round32', 'round16', 'quarters', 'semis', 'third', 'final']);
 

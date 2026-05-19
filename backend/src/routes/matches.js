@@ -1,12 +1,10 @@
 const router = require('express').Router();
-const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
 const { calculateGroupStandings, calculatePredictedStandings, awardGroupPositionPoints } = require('../utils/groupScoring');
 const { getUserPredictedAdvancement } = require('../utils/bracketSimulation');
 const liveService = require('../services/liveMatchService');
-
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 // ── SSE: live match updates ────────────────────────────────────────
 router.get('/live/stream', (req, res) => {

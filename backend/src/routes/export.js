@@ -1,11 +1,9 @@
 const router = require('express').Router();
-const { PrismaClient } = require('@prisma/client');
 const ExcelJS = require('exceljs');
 const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
 const { getUserPredictedAdvancement } = require('../utils/bracketSimulation');
-
-const prisma = new PrismaClient();
+const prisma = require('../lib/prisma');
 
 // ── Paleta ───────────────────────────────────────────────────────────
 const C = {
