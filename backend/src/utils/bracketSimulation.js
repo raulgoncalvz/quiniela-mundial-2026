@@ -82,7 +82,7 @@ async function getUserPredictedAdvancement(userId, prisma) {
   const third = (slot) => best3rdSlot[slot] || null;
 
   const knockoutMatches = await prisma.match.findMany({
-    where: { phase: { in: ['round32','round16','quarters','semis'] } },
+    where: { phase: { in: ['round32','round16','quarters','semis','third','final'] } },
     include: { predictions: { where: { userId } } },
     orderBy: { matchNumber: 'asc' },
   });
@@ -134,6 +134,18 @@ async function getUserPredictedAdvancement(userId, prisma) {
 
   bbn[101] = { home: winner(97),  away: winner(98)  };
   bbn[102] = { home: winner(99),  away: winner(100) };
+
+  const loser = (mn) => {
+    const m = matchByNumber[mn];
+    const pred = m?.predictions?.[0];
+    if (!pred || !bbn[mn]?.home || !bbn[mn]?.away) return null;
+    if (pred.homeScore > pred.awayScore) return bbn[mn].away;
+    if (pred.homeScore < pred.awayScore) return bbn[mn].home;
+    return pred.penaltyWinner === 'away' ? bbn[mn].home : bbn[mn].away;
+  };
+
+  bbn[103] = { home: loser(101),   away: loser(102)   };
+  bbn[104] = { home: winner(101),  away: winner(102)  };
 
   const round16 = new Set();
   for (let mn = 73; mn <= 88; mn++) { const w = winner(mn); if (w?.name) round16.add(w.name); }
