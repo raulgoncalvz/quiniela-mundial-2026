@@ -415,6 +415,79 @@ router.get('/groups', auth, async (req, res) => {
   }
 });
 
+// GET /api/predictions/groups/all/standings — all 12 groups in one shot
+router.get('/groups/all/standings', auth, async (req, res) => {
+  const GROUP_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+  try {
+    const [allTeams, allGroupMatches] = await Promise.all([
+      prisma.team.findMany({ where: { group: { in: GROUP_LETTERS } } }),
+      prisma.match.findMany({
+        where: { phase: 'groups' },
+        include: { predictions: { where: { userId: req.user.id } } },
+        orderBy: { matchNumber: 'asc' },
+      }),
+    ]);
+
+    const result = {};
+    for (const group of GROUP_LETTERS) {
+      const groupMatches = allGroupMatches.filter(m => m.group === group);
+      const teams = allTeams.filter(t => t.group === group);
+
+      const stats = {};
+      for (const team of teams) {
+        stats[team.id] = { id: team.id, name: team.name, team, mp: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0 };
+      }
+
+      const scoredMatches = [];
+      let predicted = 0;
+      for (const match of groupMatches) {
+        const pred = match.predictions[0];
+        if (!pred) continue;
+        predicted++;
+        const home = stats[match.homeTeamId];
+        const away = stats[match.awayTeamId];
+        if (!home || !away) continue;
+
+        home.mp++; away.mp++;
+        home.gf += pred.homeScore; home.ga += pred.awayScore;
+        away.gf += pred.awayScore; away.ga += pred.homeScore;
+
+        if (pred.homeScore > pred.awayScore) {
+          home.w++; home.pts += 3; away.l++;
+        } else if (pred.homeScore < pred.awayScore) {
+          away.w++; away.pts += 3; home.l++;
+        } else {
+          home.d++; home.pts++;
+          away.d++; away.pts++;
+        }
+        scoredMatches.push({
+          homeTeamId: match.homeTeamId, awayTeamId: match.awayTeamId,
+          homeScore: pred.homeScore, awayScore: pred.awayScore,
+        });
+      }
+
+      const sorted = sortByFifaRules(Object.values(stats), scoredMatches);
+      result[group] = {
+        standings: sorted.map((s, i) => ({
+          position: i + 1,
+          teamId: s.team.id,
+          teamName: s.team.name,
+          teamFlag: s.team.flag,
+          mp: s.mp, w: s.w, d: s.d, l: s.l,
+          gf: s.gf, ga: s.ga, gd: s.gf - s.ga, pts: s.pts,
+        })),
+        predictedMatches: predicted,
+        totalMatches: groupMatches.length,
+      };
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
 // GET /api/predictions/groups/:group/standings — standings calculated from user's own match predictions
 router.get('/groups/:group/standings', auth, async (req, res) => {
   const group = req.params.group.toUpperCase();

@@ -57,16 +57,8 @@ export default function Quiniela() {
     const load = async () => {
       setPosLoading(true);
       try {
-        const results = await Promise.all(
-          GROUP_LETTERS.map(g =>
-            api.get(`/predictions/groups/${g}/standings`)
-              .then(r => ({ g, data: r.data }))
-              .catch(() => null)
-          )
-        );
-        const standings = {};
-        for (const r of results) if (r) standings[r.g] = r.data;
-        setPosStandings(standings);
+        const { data } = await api.get('/predictions/groups/all/standings');
+        setPosStandings(data);
       } catch {
         toast.error('Error al cargar posiciones');
       } finally {
