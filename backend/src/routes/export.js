@@ -246,8 +246,8 @@ router.get('/excel', auth, admin, async (req, res) => {
       c.style = hStyle(C.blue);
     });
     ws4.columns = [
-      { width: 5 }, { width: 32 }, { width: 14 },
-      ...users.map(() => ({ width: 20 })),
+      { width: 5 }, { width: 44 }, { width: 16 },
+      ...users.map(() => ({ width: 38 })),
     ];
 
     let r4 = 5;
@@ -258,8 +258,8 @@ router.get('/excel', auth, admin, async (req, res) => {
       ws4.mergeCells(r4, 1, r4, cols4);
       const phc = ws4.getCell(r4, 1);
       phc.value = PHASE_LABEL[ph]?.toUpperCase() || ph.toUpperCase();
-      phc.style = hStyle(PHASE_COLORS[ph] || C.blue);
-      ws4.getRow(r4).height = 16;
+      phc.style = hStyle(PHASE_COLORS[ph] || C.blue, C.white, 11);
+      ws4.getRow(r4).height = 20;
       r4++;
 
       for (const m of phMatches) {
@@ -271,7 +271,7 @@ router.get('/excel', auth, admin, async (req, res) => {
 
         [
           { v: m.matchNumber,         s: dStyle(bg, C.dark, true) },
-          { v: matchLabel,            s: dStyle(bg, C.dark, false, 'left') },
+          { v: matchLabel,            s: { ...dStyle(bg, C.dark, false, 'left'), alignment: { horizontal: 'left', vertical: 'middle', wrapText: true } } },
           { v: PHASE_LABEL[ph] || ph, s: dStyle(bg) },
         ].forEach((c, i) => { ws4.getCell(r4, i+1).value = c.v; ws4.getCell(r4, i+1).style = c.s; });
 
@@ -280,23 +280,22 @@ router.get('/excel', auth, admin, async (req, res) => {
           const cell = ws4.getCell(r4, 4 + ui);
 
           if (pred) {
-            // Obtener equipos derivados del bracket de este usuario
             const slot = userBrackets[u.id]?.[m.matchNumber];
             const homeFlag = slot?.home?.flag || '';
             const awayFlag = slot?.away?.flag || '';
             const homeName = slot?.home?.name || '?';
             const awayName = slot?.away?.name || '?';
-            let txt = `${homeFlag} ${homeName} ${pred.homeScore}-${pred.awayScore} ${awayFlag} ${awayName}`;
-            if (pred.penaltyWinner) txt += pred.penaltyWinner === 'home' ? ' (←p)' : ' (p→)';
+            let txt = `${homeFlag} ${homeName}  ${pred.homeScore} - ${pred.awayScore}  ${awayFlag} ${awayName}`;
+            if (pred.penaltyWinner) txt += pred.penaltyWinner === 'home' ? '  (pen ←)' : '  (pen →)';
             cell.value = txt;
-            cell.style = predStyle(true);
+            cell.style = { ...predStyle(true), alignment: { horizontal: 'center', vertical: 'middle', wrapText: true } };
           } else {
             cell.value = '—';
             cell.style = predStyle(false);
           }
         });
 
-        ws4.getRow(r4).height = 18;
+        ws4.getRow(r4).height = 30;
         r4++;
       }
     }
