@@ -98,7 +98,7 @@ router.get('/:id/responses', auth, admin, async (req, res) => {
 
 // POST /api/trivia — create question
 router.post('/', auth, admin, async (req, res) => {
-  const { question, type, options, correctAnswer } = req.body;
+  const { question, type, options, correctAnswer, homeLabel, awayLabel } = req.body;
 
   if (!question || !correctAnswer) {
     return res.status(400).json({ error: 'Pregunta y respuesta correcta son requeridas' });
@@ -114,6 +114,8 @@ router.post('/', auth, admin, async (req, res) => {
         type: type || 'multiple',
         options: type === 'multiple' ? options.map(o => o.trim()) : [],
         correctAnswer: correctAnswer.trim(),
+        homeLabel: homeLabel?.trim() || '',
+        awayLabel: awayLabel?.trim() || '',
         isActive: false,
       },
     });

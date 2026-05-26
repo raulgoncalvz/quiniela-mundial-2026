@@ -50,6 +50,7 @@ export default function Admin() {
     question: '', type: 'multiple',
     options: ['', '', '', ''], correctAnswer: '',
     scoreHome: '', scoreAway: '',
+    homeLabel: '', awayLabel: '',
   });
   const [savingTrivia, setSavingTrivia] = useState(false);
   const [togglingTrivia, setTogglingTrivia] = useState({});
@@ -321,10 +322,12 @@ export default function Admin() {
         type: triviaForm.type,
         options: triviaForm.type === 'multiple' ? triviaForm.options.filter(o => o.trim()) : [],
         correctAnswer: triviaForm.correctAnswer,
+        homeLabel: triviaForm.homeLabel || '',
+        awayLabel: triviaForm.awayLabel || '',
       };
       const { data } = await api.post('/trivia', payload);
       setTriviaQuestions(prev => [data, ...prev]);
-      setTriviaForm({ question: '', type: 'multiple', options: ['', '', '', ''], correctAnswer: '', scoreHome: '', scoreAway: '' });
+      setTriviaForm({ question: '', type: 'multiple', options: ['', '', '', ''], correctAnswer: '', scoreHome: '', scoreAway: '', homeLabel: '', awayLabel: '' });
       setShowTriviaForm(false);
       toast.success('✅ Pregunta creada');
     } catch (err) {
@@ -931,7 +934,7 @@ export default function Admin() {
                   ].map(({ key, label }) => (
                     <button
                       type="button" key={key}
-                      onClick={() => setTriviaForm(f => ({ ...f, type: key, correctAnswer: '', scoreHome: '', scoreAway: '' }))}
+                      onClick={() => setTriviaForm(f => ({ ...f, type: key, correctAnswer: '', scoreHome: '', scoreAway: '', homeLabel: '', awayLabel: '' }))}
                       className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all ${
                         triviaForm.type === key
                           ? 'bg-wc-blue text-white border-wc-blue'
@@ -998,9 +1001,27 @@ export default function Admin() {
                       className="w-16 h-16 text-center text-3xl font-black border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-wc-blue bg-gray-50"
                     />
                   </div>
-                  <div className="flex justify-between text-[11px] text-gray-400 font-semibold px-4 mt-1">
-                    <span>Local</span>
-                    <span>Visitante</span>
+                  <div className="flex gap-3 mt-3">
+                    <div className="flex-1">
+                      <label className="text-[11px] font-bold text-gray-500 block mb-1">Equipo local</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: Brasil"
+                        value={triviaForm.homeLabel ?? ''}
+                        onChange={e => setTriviaForm(f => ({ ...f, homeLabel: e.target.value }))}
+                        className="w-full text-sm rounded-xl border border-gray-200 py-2 px-3 focus:ring-1 focus:ring-wc-blue outline-none"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[11px] font-bold text-gray-500 block mb-1">Equipo visitante</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: Francia"
+                        value={triviaForm.awayLabel ?? ''}
+                        onChange={e => setTriviaForm(f => ({ ...f, awayLabel: e.target.value }))}
+                        className="w-full text-sm rounded-xl border border-gray-200 py-2 px-3 focus:ring-1 focus:ring-wc-blue outline-none"
+                      />
+                    </div>
                   </div>
                 </div>
               )}

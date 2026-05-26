@@ -121,6 +121,8 @@ model TriviaQuestion {
   correctAnswer String
   isActive      Boolean          @default(false)
   expiresAt     DateTime?
+  homeLabel     String           @default("")
+  awayLabel     String           @default("")
   createdAt     DateTime         @default(now())
   responses     TriviaResponse[]
 }
