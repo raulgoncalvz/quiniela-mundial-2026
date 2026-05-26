@@ -80,6 +80,22 @@ router.get('/', auth, admin, async (req, res) => {
   }
 });
 
+// GET /api/trivia/:id/responses — list who answered and how
+router.get('/:id/responses', auth, admin, async (req, res) => {
+  const id = parseInt(req.params.id);
+  try {
+    const responses = await prisma.triviaResponse.findMany({
+      where: { questionId: id },
+      include: { user: { select: { id: true, name: true, username: true } } },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json(responses);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
 // POST /api/trivia — create question
 router.post('/', auth, admin, async (req, res) => {
   const { question, type, options, correctAnswer } = req.body;

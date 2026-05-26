@@ -55,6 +55,9 @@ export default function Admin() {
   const [togglingTrivia, setTogglingTrivia] = useState({});
   const [deletingTrivia, setDeletingTrivia] = useState({});
   const [showTriviaForm, setShowTriviaForm] = useState(false);
+  const [triviaResponses, setTriviaResponses] = useState({}); // { [questionId]: responses[] }
+  const [loadingResponses, setLoadingResponses] = useState({});
+  const [expandedTrivia, setExpandedTrivia] = useState({});
 
   const handleExportExcel = async () => {
     setExporting(true);
@@ -357,6 +360,22 @@ export default function Admin() {
       toast.error('Error al eliminar');
     } finally {
       setDeletingTrivia(prev => ({ ...prev, [id]: false }));
+    }
+  };
+
+  const handleToggleTriviaExpand = async (id) => {
+    const isOpen = expandedTrivia[id];
+    setExpandedTrivia(prev => ({ ...prev, [id]: !isOpen }));
+    if (!isOpen && !triviaResponses[id]) {
+      setLoadingResponses(prev => ({ ...prev, [id]: true }));
+      try {
+        const { data } = await api.get(`/trivia/${id}/responses`);
+        setTriviaResponses(prev => ({ ...prev, [id]: data }));
+      } catch {
+        toast.error('Error al cargar respuestas');
+      } finally {
+        setLoadingResponses(prev => ({ ...prev, [id]: false }));
+      }
     }
   };
 
@@ -1071,7 +1090,17 @@ export default function Admin() {
                       <span>📊 {pct}% acierto</span>
                     </div>
 
-                    <div className="flex gap-2">
+                    {/* Progress bar */}
+                    {q.totalResponses > 0 && (
+                      <div className="w-full h-1.5 bg-gray-100 rounded-full mb-3 overflow-hidden">
+                        <div
+                          className="h-full bg-green-400 rounded-full transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 mb-2">
                       <button
                         onClick={() => handleToggleTrivia(q.id, !q.isActive)}
                         disabled={!!togglingTrivia[q.id]}
@@ -1091,6 +1120,45 @@ export default function Admin() {
                         {deletingTrivia[q.id] ? '...' : '🗑'}
                       </button>
                     </div>
+
+                    {/* Ver respuestas toggle */}
+                    {q.totalResponses > 0 && (
+                      <button
+                        onClick={() => handleToggleTriviaExpand(q.id)}
+                        className="w-full py-2 rounded-xl text-xs font-bold bg-blue-50 text-wc-blue hover:bg-blue-100 transition-all"
+                      >
+                        {expandedTrivia[q.id] ? '▲ Ocultar respuestas' : `▼ Ver quién respondió (${q.totalResponses})`}
+                      </button>
+                    )}
+
+                    {/* Responses list */}
+                    {expandedTrivia[q.id] && (
+                      <div className="mt-3 space-y-1.5">
+                        {loadingResponses[q.id] ? (
+                          <div className="flex justify-center py-3"><Spinner size="sm" /></div>
+                        ) : (triviaResponses[q.id] || []).length === 0 ? (
+                          <p className="text-xs text-gray-400 text-center py-2">Sin respuestas aún</p>
+                        ) : (
+                          (triviaResponses[q.id] || []).map(r => (
+                            <div
+                              key={r.id}
+                              className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs ${
+                                r.isCorrect ? 'bg-green-50 border border-green-100' : 'bg-red-50 border border-red-100'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span>{r.isCorrect ? '✅' : '❌'}</span>
+                                <span className="font-semibold text-gray-700">{r.user.name}</span>
+                                <span className="text-gray-400">@{r.user.username}</span>
+                              </div>
+                              <span className={`font-bold ${r.isCorrect ? 'text-green-600' : 'text-red-500'}`}>
+                                {r.answer === '__timeout__' ? '⏰ tiempo' : r.answer}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
