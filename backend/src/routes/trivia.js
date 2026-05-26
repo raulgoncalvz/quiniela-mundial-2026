@@ -3,14 +3,38 @@ const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
 const prisma = require('../lib/prisma');
 
-// GET /api/trivia/active — returns the active question (no correct answer exposed)
+// GET /api/trivia/active — returns a random active, non-expired question the user hasn't answered
 router.get('/active', auth, async (req, res) => {
+  const userId = req.user.id;
+  const now = new Date();
   try {
-    const question = await prisma.triviaQuestion.findFirst({
-      where: { isActive: true },
-      select: { id: true, question: true, type: true, options: true },
+    // Auto-deactivate expired questions
+    await prisma.triviaQuestion.updateMany({
+      where: { isActive: true, expiresAt: { lt: now } },
+      data: { isActive: false },
     });
-    res.json(question || null);
+
+    // Find all active non-expired questions this user hasn't answered yet
+    const answered = await prisma.triviaResponse.findMany({
+      where: { userId },
+      select: { questionId: true },
+    });
+    const answeredIds = answered.map(r => r.questionId);
+
+    const candidates = await prisma.triviaQuestion.findMany({
+      where: {
+        isActive: true,
+        expiresAt: { gt: now },
+        id: { notIn: answeredIds.length ? answeredIds : [-1] },
+      },
+      select: { id: true, question: true, type: true, options: true, homeLabel: true, awayLabel: true, expiresAt: true },
+    });
+
+    if (candidates.length === 0) return res.json(null);
+
+    // Pick one at random
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    res.json(pick);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error del servidor' });
@@ -148,19 +172,16 @@ router.put('/:id', auth, admin, async (req, res) => {
   }
 });
 
-// PUT /api/trivia/:id/activate — toggle active (only one active at a time)
+// PUT /api/trivia/:id/activate — activate (sets 24h expiry) or deactivate
 router.put('/:id/activate', auth, admin, async (req, res) => {
   const id = parseInt(req.params.id);
   const { active } = req.body;
 
   try {
-    if (active) {
-      // Deactivate all others first
-      await prisma.triviaQuestion.updateMany({ data: { isActive: false } });
-    }
+    const expiresAt = active ? new Date(Date.now() + 24 * 60 * 60 * 1000) : null;
     const updated = await prisma.triviaQuestion.update({
       where: { id },
-      data: { isActive: active },
+      data: { isActive: active, expiresAt },
     });
     res.json(updated);
   } catch (err) {

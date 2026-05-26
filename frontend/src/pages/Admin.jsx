@@ -475,6 +475,15 @@ export default function Admin() {
     }
   };
 
+  const getTimeLeft = (expiresAt) => {
+    const diff = new Date(expiresAt) - new Date();
+    if (diff <= 0) return 'Expirada';
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+  };
+
   const STATUS_COLORS = {
     pending: 'bg-gray-100 text-gray-600',
     live: 'bg-red-100 text-wc-red',
@@ -898,7 +907,7 @@ export default function Admin() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-bold text-wc-dark">🧠 Preguntas de Trivia</h3>
-              <p className="text-xs text-gray-400">Solo una pregunta puede estar activa a la vez</p>
+              <p className="text-xs text-gray-400">Cada pregunta activa dura 24h · cada usuario ve una aleatoria</p>
             </div>
             <button
               onClick={() => setShowTriviaForm(v => !v)}
@@ -1074,9 +1083,16 @@ export default function Admin() {
                     }`}
                   >
                     {q.isActive && (
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                        <span className="text-xs font-bold text-green-600 uppercase tracking-wide">Activa ahora</span>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                          <span className="text-xs font-bold text-green-600 uppercase tracking-wide">Activa</span>
+                        </div>
+                        {q.expiresAt && (
+                          <span className="text-[11px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-lg">
+                            ⏳ {getTimeLeft(q.expiresAt)}
+                          </span>
+                        )}
                       </div>
                     )}
                     <p className="font-semibold text-wc-dark text-sm leading-snug mb-2">{q.question}</p>
