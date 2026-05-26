@@ -62,17 +62,17 @@ export default function Home() {
       .finally(() => setLoading(false));
   }, [user.id]);
 
-  // Load active trivia question — show if user hasn't seen it yet
+  // Load active trivia question — show if this user hasn't seen it yet
   useEffect(() => {
     api.get('/trivia/active').then(({ data }) => {
       if (!data) return;
-      const alreadySeen = localStorage.getItem(`trivia_seen_${data.id}`);
-      if (!alreadySeen) {
+      const key = `trivia_seen_${user.id}_${data.id}`;
+      if (!localStorage.getItem(key)) {
         setTriviaQuestion(data);
         setTimeout(() => setShowTrivia(true), 800);
       }
-    }).catch(() => {});
-  }, []);
+    }).catch(console.error);
+  }, [user.id]);
 
   // Sync SSE live updates into liveMatches state
   useEffect(() => {
@@ -106,6 +106,7 @@ export default function Home() {
       {showTrivia && triviaQuestion && (
         <TriviaModal
           question={triviaQuestion}
+          userId={user.id}
           onClose={() => setShowTrivia(false)}
         />
       )}

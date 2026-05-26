@@ -5,7 +5,7 @@ const TIMER_SECONDS = 10;
 const RADIUS = 22;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-export default function TriviaModal({ question, onClose }) {
+export default function TriviaModal({ question, userId, onClose }) {
   const [timeLeft, setTimeLeft] = useState(TIMER_SECONDS);
   const [selected, setSelected] = useState(null);
   const [scoreHome, setScoreHome] = useState('');
@@ -41,7 +41,7 @@ export default function TriviaModal({ question, onClose }) {
   };
 
   const markSeen = () => {
-    localStorage.setItem(`trivia_seen_${question.id}`, '1');
+    localStorage.setItem(`trivia_seen_${userId}_${question.id}`, '1');
   };
 
   const getAnswer = () => {
