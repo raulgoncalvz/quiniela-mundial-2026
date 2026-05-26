@@ -15,30 +15,34 @@ export default function TriviaModal({ question, userId, onClose }) {
   const [submitting, setSubmitting] = useState(false);
   const intervalRef = useRef(null);
   const awayRef = useRef(null);
+  // Ref to prevent race condition between timer and user submit
+  const claimedRef = useRef(false);
 
   useEffect(() => {
-    if (submitted) return;
     intervalRef.current = setInterval(() => {
       setTimeLeft(t => {
         if (t <= 1) {
           clearInterval(intervalRef.current);
-          handleTimeUp();
           return 0;
         }
         return t - 1;
       });
     }, 1000);
     return () => clearInterval(intervalRef.current);
-  }, [submitted]);
+  }, []);
 
-  const handleTimeUp = () => {
-    setSubmitted(true);
-    setResult({ timedOut: true, correct: false, correctAnswer: null });
-    markSeen();
-    api.post(`/trivia/${question.id}/answer`, { answer: '__timeout__' })
-      .then(r => setResult({ timedOut: true, correct: false, correctAnswer: r.data.correctAnswer }))
-      .catch(() => {});
-  };
+  // Trigger timeout only when timer hits 0 and nobody submitted yet
+  useEffect(() => {
+    if (timeLeft === 0 && !claimedRef.current) {
+      claimedRef.current = true;
+      setSubmitted(true);
+      setResult({ timedOut: true, correct: false, correctAnswer: null });
+      markSeen();
+      api.post(`/trivia/${question.id}/answer`, { answer: '__timeout__' })
+        .then(r => setResult({ timedOut: true, correct: false, correctAnswer: r.data.correctAnswer }))
+        .catch(() => {});
+    }
+  }, [timeLeft]);
 
   const markSeen = () => {
     localStorage.setItem(`trivia_seen_${userId}_${question.id}`, '1');
@@ -60,8 +64,11 @@ export default function TriviaModal({ question, userId, onClose }) {
   };
 
   const handleSubmit = async () => {
+    // Guard against race with timer
+    if (claimedRef.current) return;
+    claimedRef.current = true;
     const answer = getAnswer();
-    if (!answer || submitting) return;
+    if (!answer) return;
     clearInterval(intervalRef.current);
     setSubmitting(true);
     try {
