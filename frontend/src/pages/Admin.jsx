@@ -15,6 +15,7 @@ const PHASES = [
   { key: 'final',     label: 'Final' },
   { key: 'scoring',   label: '⚙️ Puntos' },
   { key: 'users',     label: '👥 Usuarios' },
+  { key: 'trivia',    label: '🧠 Trivia' },
 ];
 
 const GROUP_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L'];
@@ -42,6 +43,18 @@ export default function Admin() {
   const [resetPass, setResetPass] = useState({}); // { [id]: newPassword }
   const [clearing, setClearing] = useState({});
   const [exporting, setExporting] = useState(false);
+
+  // Trivia state
+  const [triviaQuestions, setTriviaQuestions] = useState([]);
+  const [triviaForm, setTriviaForm] = useState({
+    question: '', type: 'multiple',
+    options: ['', '', '', ''], correctAnswer: '',
+    scoreHome: '', scoreAway: '',
+  });
+  const [savingTrivia, setSavingTrivia] = useState(false);
+  const [togglingTrivia, setTogglingTrivia] = useState({});
+  const [deletingTrivia, setDeletingTrivia] = useState({});
+  const [showTriviaForm, setShowTriviaForm] = useState(false);
 
   const handleExportExcel = async () => {
     setExporting(true);
@@ -272,10 +285,86 @@ export default function Admin() {
     }
   };
 
+  const loadTriviaQuestions = async () => {
+    try {
+      const { data } = await api.get('/trivia');
+      setTriviaQuestions(data);
+    } catch {
+      toast.error('Error al cargar preguntas');
+    }
+  };
+
+  const handleSaveTrivia = async (e) => {
+    e.preventDefault();
+    if (!triviaForm.question.trim()) {
+      toast.error('La pregunta es obligatoria');
+      return;
+    }
+    if (triviaForm.type === 'multiple') {
+      const filled = triviaForm.options.filter(o => o.trim());
+      if (filled.length < 2) { toast.error('Mínimo 2 opciones'); return; }
+      if (!triviaForm.correctAnswer.trim()) { toast.error('Indica la respuesta correcta'); return; }
+    }
+    if (triviaForm.type === 'score') {
+      if (triviaForm.scoreHome === '' || triviaForm.scoreAway === '') {
+        toast.error('Ingresa el marcador correcto');
+        return;
+      }
+    }
+    setSavingTrivia(true);
+    try {
+      const payload = {
+        question: triviaForm.question,
+        type: triviaForm.type,
+        options: triviaForm.type === 'multiple' ? triviaForm.options.filter(o => o.trim()) : [],
+        correctAnswer: triviaForm.correctAnswer,
+      };
+      const { data } = await api.post('/trivia', payload);
+      setTriviaQuestions(prev => [data, ...prev]);
+      setTriviaForm({ question: '', type: 'multiple', options: ['', '', '', ''], correctAnswer: '', scoreHome: '', scoreAway: '' });
+      setShowTriviaForm(false);
+      toast.success('✅ Pregunta creada');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al guardar');
+    } finally {
+      setSavingTrivia(false);
+    }
+  };
+
+  const handleToggleTrivia = async (id, active) => {
+    setTogglingTrivia(prev => ({ ...prev, [id]: true }));
+    try {
+      await api.put(`/trivia/${id}/activate`, { active });
+      setTriviaQuestions(prev => prev.map(q =>
+        active ? { ...q, isActive: q.id === id } : (q.id === id ? { ...q, isActive: false } : q)
+      ));
+      toast.success(active ? '✅ Pregunta activada' : 'Pregunta desactivada');
+    } catch {
+      toast.error('Error al cambiar estado');
+    } finally {
+      setTogglingTrivia(prev => ({ ...prev, [id]: false }));
+    }
+  };
+
+  const handleDeleteTrivia = async (id) => {
+    if (!confirm('¿Eliminar esta pregunta y todas sus respuestas?')) return;
+    setDeletingTrivia(prev => ({ ...prev, [id]: true }));
+    try {
+      await api.delete(`/trivia/${id}`);
+      setTriviaQuestions(prev => prev.filter(q => q.id !== id));
+      toast.success('Pregunta eliminada');
+    } catch {
+      toast.error('Error al eliminar');
+    } finally {
+      setDeletingTrivia(prev => ({ ...prev, [id]: false }));
+    }
+  };
+
   const loadMatches = async () => {
     if (phase === 'positions') { setLoading(false); return; }
     if (phase === 'scoring') { setLoading(false); return; }
     if (phase === 'users') { setLoading(false); return; }
+    if (phase === 'trivia') { setLoading(false); return; }
     setLoading(true);
     try {
       const { data } = await api.get(`/matches?phase=${phase}`);
@@ -300,6 +389,7 @@ export default function Admin() {
   useEffect(() => {
     if (phase === 'scoring') loadScoringConfigs();
     else if (phase === 'users') loadUsers();
+    else if (phase === 'trivia') loadTriviaQuestions();
     else loadMatches();
   }, [phase]);
 
@@ -779,13 +869,243 @@ export default function Admin() {
         </div>
       )}
 
-      {phase !== 'positions' && phase !== 'scoring' && phase !== 'users' && loading ? (
+      {/* ── Trivia ── */}
+      {phase === 'trivia' && (
+        <div className="space-y-4">
+          {/* Header + new question button */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-wc-dark">🧠 Preguntas de Trivia</h3>
+              <p className="text-xs text-gray-400">Solo una pregunta puede estar activa a la vez</p>
+            </div>
+            <button
+              onClick={() => setShowTriviaForm(v => !v)}
+              className="px-4 py-2 rounded-2xl bg-wc-gradient text-white font-bold text-xs"
+            >
+              {showTriviaForm ? '✕ Cancelar' : '+ Nueva'}
+            </button>
+          </div>
+
+          {/* Create form */}
+          {showTriviaForm && (
+            <form onSubmit={handleSaveTrivia} className="card space-y-3 border border-wc-blue/20">
+              <h4 className="font-bold text-wc-dark text-sm">Nueva Pregunta</h4>
+
+              <div>
+                <label className="text-xs font-bold text-gray-600 block mb-1">Pregunta *</label>
+                <textarea
+                  rows={3}
+                  placeholder="Ej: ¿En qué año Brasil ganó su primer Mundial?"
+                  value={triviaForm.question}
+                  onChange={e => setTriviaForm(f => ({ ...f, question: e.target.value }))}
+                  className="w-full text-sm rounded-xl border border-gray-200 py-2 px-3 focus:ring-2 focus:ring-wc-blue outline-none resize-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-gray-600 block mb-1">Tipo de respuesta</label>
+                <div className="flex gap-2">
+                  {[
+                    { key: 'multiple', label: '🔘 Múltiple' },
+                    { key: 'score',    label: '⚽ Marcador' },
+                  ].map(({ key, label }) => (
+                    <button
+                      type="button" key={key}
+                      onClick={() => setTriviaForm(f => ({ ...f, type: key, correctAnswer: '', scoreHome: '', scoreAway: '' }))}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all ${
+                        triviaForm.type === key
+                          ? 'bg-wc-blue text-white border-wc-blue'
+                          : 'bg-white text-gray-600 border-gray-200'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {triviaForm.type === 'multiple' && (
+                <div>
+                  <label className="text-xs font-bold text-gray-600 block mb-1">Opciones (mín. 2)</label>
+                  <div className="space-y-2">
+                    {triviaForm.options.map((opt, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-gray-400 w-5 text-center">
+                          {String.fromCharCode(65 + i)}.
+                        </span>
+                        <input
+                          type="text"
+                          placeholder={`Opción ${String.fromCharCode(65 + i)}`}
+                          value={opt}
+                          onChange={e => {
+                            const opts = [...triviaForm.options];
+                            opts[i] = e.target.value;
+                            setTriviaForm(f => ({ ...f, options: opts }));
+                          }}
+                          className="flex-1 text-sm rounded-xl border border-gray-200 py-1.5 px-3 focus:ring-1 focus:ring-wc-blue outline-none"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {triviaForm.type === 'score' && (
+                <div>
+                  <label className="text-xs font-bold text-gray-600 block mb-2">
+                    Marcador correcto *
+                  </label>
+                  <div className="flex items-center justify-center gap-4 py-2">
+                    <input
+                      type="number" min="0" max="99"
+                      placeholder="0"
+                      value={triviaForm.scoreHome ?? ''}
+                      onChange={e => {
+                        const v = e.target.value.replace(/[^0-9]/g, '').slice(0, 2);
+                        setTriviaForm(f => ({ ...f, scoreHome: v, correctAnswer: `${v}-${f.scoreAway ?? ''}` }));
+                      }}
+                      className="w-16 h-16 text-center text-3xl font-black border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-wc-blue bg-gray-50"
+                    />
+                    <span className="text-2xl font-black text-gray-300">—</span>
+                    <input
+                      type="number" min="0" max="99"
+                      placeholder="0"
+                      value={triviaForm.scoreAway ?? ''}
+                      onChange={e => {
+                        const v = e.target.value.replace(/[^0-9]/g, '').slice(0, 2);
+                        setTriviaForm(f => ({ ...f, scoreAway: v, correctAnswer: `${f.scoreHome ?? ''}-${v}` }));
+                      }}
+                      className="w-16 h-16 text-center text-3xl font-black border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-wc-blue bg-gray-50"
+                    />
+                  </div>
+                  <div className="flex justify-between text-[11px] text-gray-400 font-semibold px-4 mt-1">
+                    <span>Local</span>
+                    <span>Visitante</span>
+                  </div>
+                </div>
+              )}
+
+              {triviaForm.type === 'multiple' && (
+                <div>
+                  <label className="text-xs font-bold text-gray-600 block mb-1">
+                    Respuesta correcta *
+                    <span className="font-normal text-gray-400 ml-1">(debe coincidir con una opción)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Respuesta correcta"
+                    value={triviaForm.correctAnswer}
+                    onChange={e => setTriviaForm(f => ({ ...f, correctAnswer: e.target.value }))}
+                    className="w-full text-sm rounded-xl border border-gray-200 py-2 px-3 focus:ring-2 focus:ring-wc-blue outline-none"
+                    required
+                  />
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={savingTrivia}
+                className="btn-primary w-full flex items-center justify-center gap-2"
+              >
+                {savingTrivia ? <Spinner size="sm" color="white" /> : '💾 Guardar Pregunta'}
+              </button>
+            </form>
+          )}
+
+          {/* Questions list */}
+          {triviaQuestions.length === 0 ? (
+            <div className="card text-center py-10 text-gray-400">
+              <p className="text-3xl mb-2">🧠</p>
+              <p className="text-sm">No hay preguntas creadas</p>
+              <p className="text-xs mt-1">Crea la primera usando el botón "+ Nueva"</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {triviaQuestions.map(q => {
+                const pct = q.totalResponses > 0
+                  ? Math.round((q.correctResponses / q.totalResponses) * 100)
+                  : 0;
+                return (
+                  <div
+                    key={q.id}
+                    className={`card border-2 transition-all ${
+                      q.isActive ? 'border-green-400 bg-green-50' : 'border-gray-100'
+                    }`}
+                  >
+                    {q.isActive && (
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                        <span className="text-xs font-bold text-green-600 uppercase tracking-wide">Activa ahora</span>
+                      </div>
+                    )}
+                    <p className="font-semibold text-wc-dark text-sm leading-snug mb-2">{q.question}</p>
+
+                    {q.type === 'multiple' && q.options.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {q.options.map((opt, i) => (
+                          <span
+                            key={i}
+                            className={`text-xs px-2 py-0.5 rounded-lg font-medium ${
+                              opt === q.correctAnswer
+                                ? 'bg-green-100 text-green-700 border border-green-200'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}
+                          >
+                            {String.fromCharCode(65 + i)}. {opt}
+                            {opt === q.correctAnswer && ' ✓'}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {q.type === 'text' && (
+                      <p className="text-xs text-gray-500 mb-2">
+                        Respuesta: <span className="font-bold text-green-700">{q.correctAnswer}</span>
+                      </p>
+                    )}
+
+                    {/* Stats */}
+                    <div className="flex items-center gap-3 text-xs text-gray-500 mb-3">
+                      <span>👥 {q.totalResponses} respuestas</span>
+                      <span>✅ {q.correctResponses} correctas</span>
+                      <span>📊 {pct}% acierto</span>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleToggleTrivia(q.id, !q.isActive)}
+                        disabled={!!togglingTrivia[q.id]}
+                        className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+                          q.isActive
+                            ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            : 'bg-green-100 text-green-700 hover:bg-green-200'
+                        }`}
+                      >
+                        {togglingTrivia[q.id] ? '...' : q.isActive ? '⏸ Desactivar' : '▶ Activar'}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTrivia(q.id)}
+                        disabled={!!deletingTrivia[q.id]}
+                        className="px-4 py-2 rounded-xl text-xs font-bold bg-red-50 text-red-500 hover:bg-red-100 transition-all"
+                      >
+                        {deletingTrivia[q.id] ? '...' : '🗑'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {phase !== 'positions' && phase !== 'scoring' && phase !== 'users' && phase !== 'trivia' && loading ? (
         <div className="flex justify-center py-12"><Spinner size="lg" /></div>
-      ) : phase !== 'positions' && phase !== 'scoring' && phase !== 'users' && matches.length === 0 ? (
+      ) : phase !== 'positions' && phase !== 'scoring' && phase !== 'users' && phase !== 'trivia' && matches.length === 0 ? (
         <div className="card text-center py-12 text-gray-400">
           <p>No hay partidos en esta fase</p>
         </div>
-      ) : phase !== 'positions' && phase !== 'scoring' && phase !== 'users' ? (
+      ) : phase !== 'positions' && phase !== 'scoring' && phase !== 'users' && phase !== 'trivia' ? (
         <div className="space-y-4">
           {matches.map(match => {
             const r = results[match.id] || {};

@@ -20,6 +20,7 @@ model User {
   championPrediction     ChampionPrediction?
   groupPredictions       GroupPrediction[]
   advancementPredictions AdvancementPrediction[]
+  triviaResponses        TriviaResponse[]
 }
 
 model GroupPrediction {
@@ -110,4 +111,29 @@ model AdvancementPrediction {
   user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, round, teamName])
+}
+
+model TriviaQuestion {
+  id            Int              @id @default(autoincrement())
+  question      String
+  type          String           @default("multiple")
+  options       String[]
+  correctAnswer String
+  isActive      Boolean          @default(false)
+  expiresAt     DateTime?
+  createdAt     DateTime         @default(now())
+  responses     TriviaResponse[]
+}
+
+model TriviaResponse {
+  id         Int            @id @default(autoincrement())
+  questionId Int
+  userId     Int
+  answer     String
+  isCorrect  Boolean
+  createdAt  DateTime       @default(now())
+  question   TriviaQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId])
 }

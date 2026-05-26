@@ -37,6 +37,7 @@ app.use('/api/teams', require('./src/routes/teams'));
 app.use('/api/config', require('./src/routes/config'));
 app.use('/api/users', require('./src/routes/users'));
 app.use('/api/export', require('./src/routes/export'));
+app.use('/api/trivia', require('./src/routes/trivia'));
 
 app.get('/health', (req, res) => res.json({ ok: true, time: new Date() }));
 

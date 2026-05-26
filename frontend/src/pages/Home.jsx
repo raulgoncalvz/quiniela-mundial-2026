@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import api from '../lib/axios';
 import Spinner from '../components/Spinner';
 import MatchCard from '../components/MatchCard';
+import TriviaModal from '../components/TriviaModal';
 import { useLiveMatches } from '../hooks/useLiveMatches';
 
 function StatCard({ value, label, icon, color = 'blue' }) {
@@ -35,6 +36,9 @@ export default function Home() {
   const [liveMatches, setLiveMatches] = useState([]);
   const liveData = useLiveMatches();
 
+  const [triviaQuestion, setTriviaQuestion] = useState(null);
+  const [showTrivia, setShowTrivia] = useState(false);
+
   useEffect(() => {
     Promise.all([
       api.get('/matches/upcoming?limit=3'),
@@ -57,6 +61,18 @@ export default function Home() {
     }).catch(console.error)
       .finally(() => setLoading(false));
   }, [user.id]);
+
+  // Load active trivia question — show if user hasn't seen it yet
+  useEffect(() => {
+    api.get('/trivia/active').then(({ data }) => {
+      if (!data) return;
+      const alreadySeen = localStorage.getItem(`trivia_seen_${data.id}`);
+      if (!alreadySeen) {
+        setTriviaQuestion(data);
+        setTimeout(() => setShowTrivia(true), 800);
+      }
+    }).catch(() => {});
+  }, []);
 
   // Sync SSE live updates into liveMatches state
   useEffect(() => {
@@ -87,6 +103,12 @@ export default function Home() {
 
   return (
     <div className="page-container page-enter">
+      {showTrivia && triviaQuestion && (
+        <TriviaModal
+          question={triviaQuestion}
+          onClose={() => setShowTrivia(false)}
+        />
+      )}
       {/* Hero Banner */}
       <div className="bg-wc-gradient rounded-3xl mb-4 text-white relative overflow-hidden">
         {/* Logo image — top section */}
