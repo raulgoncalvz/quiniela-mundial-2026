@@ -6,33 +6,32 @@ const prisma = require('../lib/prisma');
 // GET /api/trivia/active — returns a random active, non-expired question the user hasn't answered
 router.get('/active', auth, async (req, res) => {
   const userId = req.user.id;
-  const now = new Date();
   try {
-    // Auto-deactivate expired questions
-    await prisma.triviaQuestion.updateMany({
-      where: { isActive: true, expiresAt: { lt: now } },
-      data: { isActive: false },
-    });
+    // Auto-deactivate expired questions (raw SQL to bypass outdated Prisma client)
+    await prisma.$executeRaw`
+      UPDATE "TriviaQuestion"
+      SET "isActive" = false
+      WHERE "isActive" = true
+        AND "expiresAt" IS NOT NULL
+        AND "expiresAt" < NOW()
+    `;
 
-    // Find all active non-expired questions this user hasn't answered yet
-    const answered = await prisma.triviaResponse.findMany({
-      where: { userId },
-      select: { questionId: true },
-    });
-    const answeredIds = answered.map(r => r.questionId);
+    // Get active non-expired questions not yet answered by this user
+    const candidates = await prisma.$queryRaw`
+      SELECT id, question, type, options,
+             COALESCE("homeLabel", '') AS "homeLabel",
+             COALESCE("awayLabel", '') AS "awayLabel",
+             "expiresAt"
+      FROM "TriviaQuestion"
+      WHERE "isActive" = true
+        AND ("expiresAt" IS NULL OR "expiresAt" > NOW())
+        AND id NOT IN (
+          SELECT "questionId" FROM "TriviaResponse" WHERE "userId" = ${userId}
+        )
+    `;
 
-    const candidates = await prisma.triviaQuestion.findMany({
-      where: {
-        isActive: true,
-        expiresAt: { gt: now },
-        id: { notIn: answeredIds.length ? answeredIds : [-1] },
-      },
-      select: { id: true, question: true, type: true, options: true, homeLabel: true, awayLabel: true, expiresAt: true },
-    });
+    if (!candidates.length) return res.json(null);
 
-    if (candidates.length === 0) return res.json(null);
-
-    // Pick one at random
     const pick = candidates[Math.floor(Math.random() * candidates.length)];
     res.json(pick);
   } catch (err) {
@@ -79,25 +78,22 @@ router.post('/:id/answer', auth, async (req, res) => {
 // GET /api/trivia — list all questions with response stats
 router.get('/', auth, admin, async (req, res) => {
   try {
-    const questions = await prisma.triviaQuestion.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: { _count: { select: { responses: true } } },
-    });
-
-    const result = await Promise.all(
-      questions.map(async (q) => {
-        const correctCount = await prisma.triviaResponse.count({
-          where: { questionId: q.id, isCorrect: true },
-        });
-        return {
-          ...q,
-          totalResponses: q._count.responses,
-          correctResponses: correctCount,
-        };
-      })
-    );
-
-    res.json(result);
+    const questions = await prisma.$queryRaw`
+      SELECT
+        q.id, q.question, q.type, q.options, q."isActive",
+        COALESCE(q."correctAnswer", '') AS "correctAnswer",
+        COALESCE(q."homeLabel", '')     AS "homeLabel",
+        COALESCE(q."awayLabel", '')     AS "awayLabel",
+        q."expiresAt",
+        q."createdAt",
+        COUNT(r.id)::int                           AS "totalResponses",
+        COUNT(CASE WHEN r."isCorrect" THEN 1 END)::int AS "correctResponses"
+      FROM "TriviaQuestion" q
+      LEFT JOIN "TriviaResponse" r ON r."questionId" = q.id
+      GROUP BY q.id
+      ORDER BY q."createdAt" DESC
+    `;
+    res.json(questions);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error del servidor' });
@@ -178,12 +174,30 @@ router.put('/:id/activate', auth, admin, async (req, res) => {
   const { active } = req.body;
 
   try {
-    const expiresAt = active ? new Date(Date.now() + 24 * 60 * 60 * 1000) : null;
-    const updated = await prisma.triviaQuestion.update({
-      where: { id },
-      data: { isActive: active, expiresAt },
-    });
-    res.json(updated);
+    if (active) {
+      await prisma.$executeRaw`
+        UPDATE "TriviaQuestion"
+        SET "isActive" = true,
+            "expiresAt" = NOW() + INTERVAL '24 hours'
+        WHERE id = ${id}
+      `;
+    } else {
+      await prisma.$executeRaw`
+        UPDATE "TriviaQuestion"
+        SET "isActive" = false,
+            "expiresAt" = NULL
+        WHERE id = ${id}
+      `;
+    }
+    // Return updated record using fields Prisma client knows about
+    const rows = await prisma.$queryRaw`
+      SELECT id, question, type, options, "isActive",
+             COALESCE("homeLabel", '') AS "homeLabel",
+             COALESCE("awayLabel", '') AS "awayLabel",
+             "expiresAt", "createdAt"
+      FROM "TriviaQuestion" WHERE id = ${id}
+    `;
+    res.json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error del servidor' });
