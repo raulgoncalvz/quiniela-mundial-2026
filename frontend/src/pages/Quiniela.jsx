@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 import api from '../lib/axios';
 import MatchCard from '../components/MatchCard';
@@ -39,6 +39,8 @@ export default function Quiniela() {
   const [loading, setLoading] = useState(true);
   const [predsReady, setPredsReady] = useState(false);
   const [savingChamp, setSavingChamp] = useState(false);
+  const champFormRef = useRef(champForm);
+  useEffect(() => { champFormRef.current = champForm; }, [champForm]);
   const [posStandings, setPosStandings] = useState({});
   const [posLoading, setPosLoading] = useState(false);
   const [bracketTeams, setBracketTeams] = useState({});
@@ -131,7 +133,7 @@ export default function Quiniela() {
       .catch(() => {});
   }, [activePhase]);
 
-  // Auto-derive champion/runner-up/third from bracket predictions
+  // Auto-derive champion/runner-up/third from bracket predictions and auto-save
   useEffect(() => {
     if (activePhase !== 'final' && activePhase !== 'third') return;
     if (matches.length === 0) return;
@@ -155,10 +157,21 @@ export default function Quiniela() {
         loserName  = pred.penaltyWinner === 'away' ? homeTeam : awayTeam;
       }
 
+      const current = champFormRef.current;
       if (activePhase === 'final') {
-        setChampForm(f => ({ ...f, champion: winnerName, runnerUp: loserName }));
+        if (current.champion === winnerName && current.runnerUp === loserName) continue;
+        const updates = { champion: winnerName, runnerUp: loserName };
+        setChampForm(f => ({ ...f, ...updates }));
+        api.post('/predictions/champion', { ...current, ...updates })
+          .then(({ data }) => setChampion(data))
+          .catch(() => {});
       } else {
-        setChampForm(f => ({ ...f, third: winnerName }));
+        if (current.third === winnerName) continue;
+        const updates = { third: winnerName };
+        setChampForm(f => ({ ...f, ...updates }));
+        api.post('/predictions/champion', { ...current, ...updates })
+          .then(({ data }) => setChampion(data))
+          .catch(() => {});
       }
     }
   }, [predictions, bracketTeams, matches, activePhase]);
@@ -185,7 +198,7 @@ export default function Quiniela() {
     try {
       const { data } = await api.post('/predictions/champion', champForm);
       setChampion(data);
-      toast.success('¡Apuesta especial guardada! 🏆');
+      toast.success('¡Premios individuales guardados! 🏆');
     } catch (err) {
       toast.error('Error al guardar');
     } finally {
@@ -567,8 +580,13 @@ export default function Quiniela() {
                 ))}
               </div>
 
+              {(!champForm.champion || !champForm.runnerUp || !champForm.third) && (
+                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  ℹ️ El podio se completará automáticamente cuando visites las pestañas <strong>Final</strong> y <strong>3er Lugar</strong>.
+                </p>
+              )}
               <button type="submit" disabled={savingChamp} className="btn-gold w-full flex items-center justify-center gap-2">
-                {savingChamp ? <Spinner size="sm" color="white" /> : '💾 Guardar Apuestas Especiales'}
+                {savingChamp ? <Spinner size="sm" color="white" /> : '💾 Guardar Bota, Balón y Portero'}
               </button>
 
               {champion?.champion && (

@@ -126,16 +126,16 @@ router.get('/excel', auth, admin, async (req, res) => {
       return { ...u, myPreds, hasChamp, hasGroups, total, pct };
     }).sort((a, b) => b.myPreds - a.myPreds);
 
-    // ── Bracket simulado por usuario en paralelo ─────────────────────
-    const bracketResults = await Promise.all(
-      users.map(u =>
-        getUserPredictedAdvancement(u.id, prisma)
-          .then(sim => ({ id: u.id, teams: sim.matchTeams || {} }))
-          .catch(() => ({ id: u.id, teams: {} }))
-      )
-    );
+    // ── Bracket simulado por usuario (secuencial para evitar saturar la conexión) ──
     const userBrackets = {};
-    for (const r of bracketResults) userBrackets[r.id] = r.teams;
+    for (const u of users) {
+      try {
+        const sim = await getUserPredictedAdvancement(u.id, prisma);
+        userBrackets[u.id] = sim.matchTeams || {};
+      } catch {
+        userBrackets[u.id] = {};
+      }
+    }
 
     // ── 2. Workbook ───────────────────────────────────────────────────
     const wb = new ExcelJS.Workbook();
@@ -281,10 +281,10 @@ router.get('/excel', auth, admin, async (req, res) => {
 
           if (pred) {
             const slot = userBrackets[u.id]?.[m.matchNumber];
-            const homeFlag = slot?.home?.flag || '';
-            const awayFlag = slot?.away?.flag || '';
-            const homeName = slot?.home?.name || '?';
-            const awayName = slot?.away?.name || '?';
+            const homeFlag = slot?.home?.flag || m.homeTeam?.flag || '';
+            const awayFlag = slot?.away?.flag || m.awayTeam?.flag || '';
+            const homeName = slot?.home?.name || m.homeTeam?.name || '(TBD)';
+            const awayName = slot?.away?.name || m.awayTeam?.name || '(TBD)';
             let txt = `${homeFlag} ${homeName}  ${pred.homeScore} - ${pred.awayScore}  ${awayFlag} ${awayName}`;
             if (pred.penaltyWinner) txt += pred.penaltyWinner === 'home' ? '  (pen ←)' : '  (pen →)';
             cell.value = txt;
