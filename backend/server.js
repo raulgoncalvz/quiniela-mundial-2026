@@ -3,9 +3,14 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Detrás del proxy de Render: confiar en 1 salto para que req.ip sea la IP real
+// del cliente y no la del proxy (si no, el rate limit se comparte entre todos).
+app.set('trust proxy', 1);
 
 app.use(helmet());
 
@@ -26,7 +31,27 @@ app.use(cors({
 }));
 app.use(express.json());
 
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200 });
+// Rate limit por usuario autenticado (cae a IP si no hay token válido).
+// La quiniela genera muchas peticiones legítimas al llenarse, así que el
+// presupuesto es alto y se cuenta por persona, no global.
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET);
+        if (decoded?.id) return `user:${decoded.id}`;
+      } catch {
+        // token inválido o expirado → cae al límite por IP
+      }
+    }
+    return req.ip;
+  },
+});
 app.use('/api/', limiter);
 
 app.use('/api/auth', require('./src/routes/auth'));
