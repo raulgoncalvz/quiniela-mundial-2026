@@ -37,8 +37,8 @@ export default function Quiniela() {
   const [champion, setChampion] = useState(null);
   const [champForm, setChampForm] = useState({ champion:'', runnerUp:'', third:'', topScorer:'', bestPlayer:'', bestGoalkeeper:'' });
   const [loading, setLoading] = useState(true);
+  const [predsReady, setPredsReady] = useState(false);
   const [savingChamp, setSavingChamp] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [posStandings, setPosStandings] = useState({});
   const [posLoading, setPosLoading] = useState(false);
   const [bracketTeams, setBracketTeams] = useState({});
@@ -50,6 +50,33 @@ export default function Quiniela() {
   // Fetch lock status on mount
   useEffect(() => {
     api.get('/predictions/lock').then(({ data }) => setLockInfo(data)).catch(() => {});
+  }, []);
+
+  // Fetch user predictions + champion once on mount. They don't depend on the
+  // active phase/group, and saves keep local state in sync, so refetching them
+  // on every tab switch was redundant.
+  useEffect(() => {
+    const loadUserPredictions = async () => {
+      try {
+        const [predRes, champRes] = await Promise.all([
+          api.get('/predictions'),
+          api.get('/predictions/champion'),
+        ]);
+        const predMap = {};
+        for (const p of predRes.data) predMap[p.matchId] = p;
+        setPredictions(predMap);
+        if (champRes.data) {
+          setChampion(champRes.data);
+          setChampForm(champRes.data);
+        }
+      } catch (err) {
+        toast.error('Error al cargar los datos');
+        console.error(err);
+      } finally {
+        setPredsReady(true);
+      }
+    };
+    loadUserPredictions();
   }, []);
 
   useEffect(() => {
@@ -84,29 +111,8 @@ export default function Quiniela() {
       const params = new URLSearchParams({ phase: activePhase });
       if (activePhase === 'groups') params.set('group', activeGroup);
 
-      const [matchRes, predRes, champRes] = await Promise.all([
-        api.get(`/matches?${params}`),
-        api.get('/predictions'),
-        api.get('/predictions/champion'),
-      ]);
-
-      setMatches(matchRes.data);
-
-      const predMap = {};
-      for (const p of predRes.data) predMap[p.matchId] = p;
-      setPredictions(predMap);
-
-      if (champRes.data) {
-        setChampion(champRes.data);
-        setChampForm(champRes.data);
-      }
-
-      // Progress for group stage — total predictions made vs total matches in group
-      if (activePhase === 'groups') {
-        const total = matchRes.data.length;
-        const done = matchRes.data.filter(m => predMap[m.id]).length;
-        setProgress(total > 0 ? Math.round((done / total) * 100) : 100);
-      }
+      const { data } = await api.get(`/matches?${params}`);
+      setMatches(data);
     } catch (err) {
       toast.error('Error al cargar los datos');
       console.error(err);
@@ -189,6 +195,7 @@ export default function Quiniela() {
 
   const pending = matches.filter(m => m.status === 'pending');
   const predicted = matches.filter(m => predictions[m.id]);
+  const progress = matches.length > 0 ? Math.round((predicted.length / matches.length) * 100) : 0;
 
   return (
     <div className="page-container page-enter">
@@ -475,7 +482,7 @@ export default function Quiniela() {
       {/* ── Partidos (todas las fases excepto posiciones) ── */}
       {activePhase !== 'positions' && (
         <>
-          {loading ? (
+          {loading || !predsReady ? (
             <div className="flex justify-center py-12"><Spinner size="lg" /></div>
           ) : matches.length === 0 ? (
             <div className="card text-center py-12 text-gray-400">
