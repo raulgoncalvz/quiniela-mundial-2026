@@ -69,7 +69,8 @@ export default function MatchCard({ match, prediction, onSave, readOnly = false,
   }, [prediction]);
 
   const isKnockout = KNOCKOUT_PHASES.includes(match.phase);
-  const canEdit = !readOnly && match.status === 'pending';
+  const isPending = match.status === 'pending';
+  const canEdit = !readOnly && isPending;
   const homeTeam = match.homeTeam;
   const awayTeam = match.awayTeam;
   const status = STATUS_BADGE[match.status] || STATUS_BADGE.pending;
@@ -217,18 +218,20 @@ export default function MatchCard({ match, prediction, onSave, readOnly = false,
                 </div>
               </div>
             </div>
-          ) : canEdit ? (
-            /* Prediction inputs */
+          ) : isPending ? (
+            /* Prediction inputs (read-only once locked: mismo estilo, sin editar) */
             <div className="flex flex-col items-center gap-1">
-              <span className="text-xs text-gray-400">Tu pronóstico</span>
+              <span className="text-xs text-gray-400">{readOnly ? 'Tu pronóstico 🔒' : 'Tu pronóstico'}</span>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
                   className="score-input"
                   placeholder="0"
                   value={homeScore}
-                  onChange={handleInput(setHomeScore)}
-                  onBlur={handleBlurSave}
+                  onChange={readOnly ? undefined : handleInput(setHomeScore)}
+                  onBlur={readOnly ? undefined : handleBlurSave}
+                  readOnly={readOnly}
+                  tabIndex={readOnly ? -1 : undefined}
                   min="0"
                   max="20"
                 />
@@ -238,8 +241,10 @@ export default function MatchCard({ match, prediction, onSave, readOnly = false,
                   className="score-input"
                   placeholder="0"
                   value={awayScore}
-                  onChange={handleInput(setAwayScore)}
-                  onBlur={handleBlurSave}
+                  onChange={readOnly ? undefined : handleInput(setAwayScore)}
+                  onBlur={readOnly ? undefined : handleBlurSave}
+                  readOnly={readOnly}
+                  tabIndex={readOnly ? -1 : undefined}
                   min="0"
                   max="20"
                 />

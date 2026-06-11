@@ -526,6 +526,7 @@ export default function Quiniela() {
                     match={enriched}
                     prediction={predictions[match.id]}
                     onSave={handleSavePrediction}
+                    readOnly={lockInfo?.locked}
                     liveMinute={live?.minute}
                   />
                 );
@@ -574,6 +575,7 @@ export default function Quiniela() {
                     <input type="text" placeholder={placeholder}
                       value={champForm[key]}
                       onChange={e => setChampForm(f => ({ ...f, [key]: e.target.value }))}
+                      readOnly={lockInfo?.locked}
                       className="input-field text-sm py-2"
                     />
                   </div>
@@ -585,8 +587,8 @@ export default function Quiniela() {
                   ℹ️ El podio se completará automáticamente cuando visites las pestañas <strong>Final</strong> y <strong>3er Lugar</strong>.
                 </p>
               )}
-              <button type="submit" disabled={savingChamp} className="btn-gold w-full flex items-center justify-center gap-2">
-                {savingChamp ? <Spinner size="sm" color="white" /> : '💾 Guardar Bota, Balón y Portero'}
+              <button type="submit" disabled={savingChamp || lockInfo?.locked} className="btn-gold w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                {savingChamp ? <Spinner size="sm" color="white" /> : lockInfo?.locked ? '🔒 Apuestas bloqueadas' : '💾 Guardar Bota, Balón y Portero'}
               </button>
 
               {champion?.champion && (
