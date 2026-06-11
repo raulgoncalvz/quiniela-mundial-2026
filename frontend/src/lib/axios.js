@@ -2,7 +2,11 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api',
-  timeout: 10000,
+  // Render's free tier spins the backend down after inactivity, so the first
+  // request can take 30-50s to wake it up. 10s was too aggressive and surfaced
+  // as spurious "Error" toasts. Heavy admin operations pass their own longer
+  // timeout per-request.
+  timeout: 45000,
 });
 
 // Attach JWT token to every request

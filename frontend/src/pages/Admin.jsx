@@ -170,7 +170,7 @@ export default function Admin() {
   const handleRecalculate = async () => {
     setRecalculating(true);
     try {
-      const { data } = await api.post('/config/scoring/recalculate');
+      const { data } = await api.post('/config/scoring/recalculate', {}, { timeout: 180000 });
       toast.success(`✅ ${data.predictionsRecalculated} predicciones recalculadas`);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al recalcular');
@@ -182,7 +182,7 @@ export default function Admin() {
   const handleSyncPodiums = async () => {
     setSyncingPodiums(true);
     try {
-      const { data } = await api.post('/config/podium/sync');
+      const { data } = await api.post('/config/podium/sync', {}, { timeout: 180000 });
       toast.success(`✅ ${data.fixed} podios corregidos de ${data.checked} participantes`);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al corregir podios');
@@ -241,7 +241,7 @@ export default function Admin() {
   const handleCalculateChamp = async () => {
     setCalculatingChamp(true);
     try {
-      const { data } = await api.post('/config/champion/calculate', champForm);
+      const { data } = await api.post('/config/champion/calculate', champForm, { timeout: 180000 });
       toast.success(`✅ Puntos especiales asignados a ${data.updated} usuarios`);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al calcular');
@@ -460,7 +460,7 @@ export default function Admin() {
         awayScore: parseInt(r.awayScore),
         status: 'finished',
         penaltyWinner: isKnockoutPhase && isDraw ? r.penaltyWinner : null,
-      });
+      }, { timeout: 180000 });
       setMatches(prev => prev.map(m =>
         m.id === matchId
           ? { ...m, homeScore: parseInt(r.homeScore), awayScore: parseInt(r.awayScore), status: 'finished', penaltyWinner: isKnockoutPhase && isDraw ? r.penaltyWinner : null }
