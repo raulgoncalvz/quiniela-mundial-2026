@@ -159,7 +159,15 @@ async function getUserPredictedAdvancement(userId, prisma) {
   const final = new Set();
   for (const mn of [101, 102]) { const w = winner(mn); if (w?.name) final.add(w.name); }
 
-  return { round16, quarters, semis, final, matchTeams: bbn };
+  // Podio derivado del bracket: campeón = ganador de la Final (104),
+  // finalista = perdedor de la Final, 3° = ganador del partido por el 3er lugar (103).
+  const podium = {
+    champion: winner(104)?.name || '',
+    runnerUp: loser(104)?.name  || '',
+    third:    winner(103)?.name || '',
+  };
+
+  return { round16, quarters, semis, final, matchTeams: bbn, podium };
 }
 
 module.exports = { getUserPredictedAdvancement };

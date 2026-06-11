@@ -44,6 +44,7 @@ export default function Quiniela() {
   const [posStandings, setPosStandings] = useState({});
   const [posLoading, setPosLoading] = useState(false);
   const [bracketTeams, setBracketTeams] = useState({});
+  const [derivedPodium, setDerivedPodium] = useState(null);
   const [thirds, setThirds] = useState(null);
   const [thirdsLoading, setThirdsLoading] = useState(false);
   const [lockInfo, setLockInfo] = useState(null);
@@ -125,67 +126,54 @@ export default function Quiniela() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Fetch predicted bracket whenever switching to a knockout phase
+  // Fetch the full predicted bracket + derived podium. Single source of truth
+  // for both the knockout team labels and the champion/runner-up/third boxes.
+  const loadBracket = useCallback(() => {
+    return api.get('/predictions/bracket')
+      .then(({ data }) => {
+        setBracketTeams(data.teams || {});
+        setDerivedPodium(data.podium || null);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Load the bracket once predictions are ready so the podium stays correct on
+  // every tab (not just Final / 3er Lugar).
+  useEffect(() => {
+    if (!predsReady) return;
+    loadBracket();
+  }, [predsReady, loadBracket]);
+
+  // Refresh the bracket when navigating to a knockout phase.
   useEffect(() => {
     if (!KNOCKOUT_PHASES.includes(activePhase)) return;
-    api.get('/predictions/bracket')
-      .then(({ data }) => setBracketTeams(data))
-      .catch(() => {});
-  }, [activePhase]);
+    loadBracket();
+  }, [activePhase, loadBracket]);
 
-  // Auto-derive champion/runner-up/third from bracket predictions and auto-save
+  // Sync the podium from the bracket. The bracket is the single source of truth,
+  // so whenever it changes we overwrite champion/runner-up/third — including
+  // clearing stale values (e.g. a team that used to be 3rd but now reaches the
+  // final). This prevents impossible podiums like "Spain champion AND 3rd place".
   useEffect(() => {
-    if (activePhase !== 'final' && activePhase !== 'third') return;
-    if (matches.length === 0) return;
+    if (!derivedPodium || !predsReady || lockInfo?.locked) return;
+    const current = champFormRef.current;
+    const { champion, runnerUp, third } = derivedPodium;
+    if (current.champion === champion && current.runnerUp === runnerUp && current.third === third) return;
 
-    for (const match of matches) {
-      const pred = predictions[match.id];
-      if (!pred || pred.homeScore === null || pred.awayScore === null) continue;
-
-      const bt = bracketTeams[match.id];
-      const homeTeam = bt?.home?.name || match.homeTeam?.name;
-      const awayTeam = bt?.away?.name || match.awayTeam?.name;
-      if (!homeTeam || !awayTeam) continue;
-
-      let winnerName, loserName;
-      if (pred.homeScore > pred.awayScore) {
-        winnerName = homeTeam; loserName = awayTeam;
-      } else if (pred.homeScore < pred.awayScore) {
-        winnerName = awayTeam; loserName = homeTeam;
-      } else {
-        winnerName = pred.penaltyWinner === 'away' ? awayTeam : homeTeam;
-        loserName  = pred.penaltyWinner === 'away' ? homeTeam : awayTeam;
-      }
-
-      const current = champFormRef.current;
-      if (activePhase === 'final') {
-        if (current.champion === winnerName && current.runnerUp === loserName) continue;
-        const updates = { champion: winnerName, runnerUp: loserName };
-        setChampForm(f => ({ ...f, ...updates }));
-        api.post('/predictions/champion', { ...current, ...updates })
-          .then(({ data }) => setChampion(data))
-          .catch(() => {});
-      } else {
-        if (current.third === winnerName) continue;
-        const updates = { third: winnerName };
-        setChampForm(f => ({ ...f, ...updates }));
-        api.post('/predictions/champion', { ...current, ...updates })
-          .then(({ data }) => setChampion(data))
-          .catch(() => {});
-      }
-    }
-  }, [predictions, bracketTeams, matches, activePhase]);
+    const updates = { champion, runnerUp, third };
+    setChampForm(f => ({ ...f, ...updates }));
+    api.post('/predictions/champion', { ...current, ...updates })
+      .then(({ data }) => setChampion(data))
+      .catch(() => {});
+  }, [derivedPodium, predsReady, lockInfo]);
 
   const handleSavePrediction = async (matchId, homeScore, awayScore, penaltyWinner) => {
     try {
       const { data } = await api.post('/predictions', { matchId, homeScore, awayScore, penaltyWinner: penaltyWinner || null });
       setPredictions(prev => ({ ...prev, [matchId]: data }));
-      // Refresh bracket after saving a knockout prediction (winner may change)
-      if (KNOCKOUT_PHASES.includes(activePhase)) {
-        api.get('/predictions/bracket')
-          .then(({ data: bt }) => setBracketTeams(bt))
-          .catch(() => {});
-      }
+      // Any prediction (group or knockout) can change the bracket and therefore
+      // the derived podium, so always refresh it.
+      loadBracket();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al guardar');
       throw err;
@@ -542,7 +530,7 @@ export default function Quiniela() {
               {/* Podio */}
               <div>
                 <p className="text-xs font-bold text-gray-600 mb-1">🏆 Podio Final</p>
-                <p className="text-xs text-gray-400 mb-2">Se completa automáticamente según tu bracket (Final y 3er Lugar)</p>
+                <p className="text-xs text-gray-400 mb-2">Se completa automáticamente según cómo llenaste tus llaves</p>
                 <div className="grid grid-cols-3 gap-3">
                   {[
                     { key: 'champion', label: '🥇 Campeón' },
@@ -584,7 +572,7 @@ export default function Quiniela() {
 
               {(!champForm.champion || !champForm.runnerUp || !champForm.third) && (
                 <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                  ℹ️ El podio se completará automáticamente cuando visites las pestañas <strong>Final</strong> y <strong>3er Lugar</strong>.
+                  ℹ️ El podio se completará solo cuando termines de llenar tus llaves hasta la <strong>Final</strong> y el <strong>3er Lugar</strong>.
                 </p>
               )}
               <button type="submit" disabled={savingChamp || lockInfo?.locked} className="btn-gold w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">

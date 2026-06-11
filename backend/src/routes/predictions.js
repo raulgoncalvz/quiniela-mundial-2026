@@ -304,7 +304,16 @@ router.get('/bracket', auth, async (req, res) => {
       if (bbn[m.matchNumber]) result[m.id] = bbn[m.matchNumber];
     }
 
-    res.json(result);
+    // Podio derivado del bracket — única fuente de verdad.
+    // Final (104): ganador = campeón, perdedor = finalista. 3er Lugar (103): ganador = 3°.
+    // Si el bracket no determina aún a un equipo, devolvemos '' para limpiar valores obsoletos.
+    const podium = {
+      champion: winner(104)?.name || '',
+      runnerUp: loser(104)?.name || '',
+      third:    winner(103)?.name || '',
+    };
+
+    res.json({ teams: result, podium });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error del servidor' });

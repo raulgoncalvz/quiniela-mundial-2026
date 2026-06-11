@@ -33,6 +33,7 @@ export default function Admin() {
   const [scoringConfigs, setScoringConfigs] = useState([]);
   const [savingScoring, setSavingScoring] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
+  const [syncingPodiums, setSyncingPodiums] = useState(false);
   const [champForm, setChampForm] = useState({ champion:'', runnerUp:'', third:'', topScorer:'', bestPlayer:'', bestGoalkeeper:'' });
   const [calculatingChamp, setCalculatingChamp] = useState(false);
   const [derivingChamp, setDerivingChamp] = useState(false);
@@ -175,6 +176,18 @@ export default function Admin() {
       toast.error(err.response?.data?.error || 'Error al recalcular');
     } finally {
       setRecalculating(false);
+    }
+  };
+
+  const handleSyncPodiums = async () => {
+    setSyncingPodiums(true);
+    try {
+      const { data } = await api.post('/config/podium/sync');
+      toast.success(`✅ ${data.fixed} podios corregidos de ${data.checked} participantes`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al corregir podios');
+    } finally {
+      setSyncingPodiums(false);
     }
   };
 
@@ -746,6 +759,19 @@ export default function Admin() {
             <button onClick={handleRecalculate} disabled={recalculating}
               className="w-full py-2 rounded-xl bg-gray-600 hover:bg-gray-700 text-white font-bold text-sm transition-all flex items-center justify-center gap-2">
               {recalculating ? <Spinner size="sm" color="white" /> : '⚡ Recalcular Partidos'}
+            </button>
+          </div>
+
+          {/* Corregir podios */}
+          <div className="card border border-gray-200">
+            <h3 className="font-bold text-gray-700 mb-1">🏆 Corregir Podios de Participantes</h3>
+            <p className="text-xs text-gray-500 mb-3">
+              Recalcula el Campeón, Finalista y 3er Lugar de cada participante a partir de sus
+              llaves. Corrige podios inconsistentes (ej. un equipo como campeón y 3° a la vez).
+            </p>
+            <button onClick={handleSyncPodiums} disabled={syncingPodiums}
+              className="w-full py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm transition-all flex items-center justify-center gap-2">
+              {syncingPodiums ? <Spinner size="sm" color="white" /> : '🔧 Corregir Podios'}
             </button>
           </div>
 

@@ -346,4 +346,46 @@ router.post('/champion/calculate', auth, admin, async (req, res) => {
   }
 });
 
+// POST /api/config/podium/sync — recompute every user's stored podium (champion,
+// runnerUp, third) from their predicted bracket. Fixes inconsistencies such as a
+// team stored as both champion and 3rd place, and re-syncs podiums saved before
+// the bracket was completed. Admin-only, so it bypasses the prediction lock.
+router.post('/podium/sync', auth, admin, async (req, res) => {
+  try {
+    const preds = await prisma.championPrediction.findMany();
+    let updated = 0;
+    let fixed = 0;
+
+    for (const pred of preds) {
+      try {
+        const { podium } = await getUserPredictedAdvancement(pred.userId, prisma);
+        const changed =
+          pred.champion !== podium.champion ||
+          pred.runnerUp !== podium.runnerUp ||
+          pred.third    !== podium.third;
+
+        if (changed) {
+          await prisma.championPrediction.update({
+            where: { id: pred.id },
+            data: {
+              champion: podium.champion,
+              runnerUp: podium.runnerUp,
+              third:    podium.third,
+            },
+          });
+          fixed++;
+        }
+        updated++;
+      } catch (userErr) {
+        console.error(`Error sincronizando podio del usuario ${pred.userId}:`, userErr.message);
+      }
+    }
+
+    res.json({ success: true, checked: updated, fixed });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
 module.exports = router;
