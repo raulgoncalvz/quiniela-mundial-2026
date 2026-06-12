@@ -5,6 +5,35 @@ import Spinner from '../components/Spinner';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
+// Flechita de cambio de posición. Se muestra solo mientras la ventana de
+// movimiento está activa (delta != null). Verde = subió, rojo = bajó,
+// raya gris = se mantuvo, "NEW" = participante recién aparecido.
+function MovementBadge({ delta, isNew }) {
+  if (isNew) {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-[9px] font-black text-green-600 leading-none">
+        <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+        NEW
+      </span>
+    );
+  }
+  if (delta === null || delta === undefined) return null;
+  if (delta === 0) {
+    return <span className="text-[11px] font-bold text-gray-300 leading-none">–</span>;
+  }
+  const up = delta > 0;
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 text-[10px] font-black leading-none ${up ? 'text-green-600' : 'text-red-500'}`}
+    >
+      <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="currentColor">
+        {up ? <path d="M12 5l7 9H5z" /> : <path d="M12 19l7-9H5z" />}
+      </svg>
+      {Math.abs(delta)}
+    </span>
+  );
+}
+
 function PodiumCard({ user, position }) {
   const sizes = ['', 'order-2', 'order-1', 'order-3'];
   const heights = ['', 'h-32', 'h-24', 'h-20'];
@@ -78,6 +107,16 @@ export default function Ranking() {
             <p className="text-sm opacity-80">
               {myPosition.exactScores} exactos · {myPosition.accuracy}% precisión
             </p>
+            {myPosition.delta > 0 && (
+              <p className="text-xs font-bold text-green-300 mt-0.5">
+                ▲ Subiste {myPosition.delta} {myPosition.delta === 1 ? 'puesto' : 'puestos'} 🔥
+              </p>
+            )}
+            {myPosition.delta < 0 && (
+              <p className="text-xs font-bold text-red-300 mt-0.5">
+                ▼ Bajaste {Math.abs(myPosition.delta)} {Math.abs(myPosition.delta) === 1 ? 'puesto' : 'puestos'}
+              </p>
+            )}
           </div>
           <div className="text-right">
             <p className="text-3xl font-black">{myPosition.totalPoints}</p>
@@ -129,19 +168,24 @@ export default function Ranking() {
             <p>No se encontraron participantes</p>
           </div>
         ) : (
-          filtered.map(u => {
+          filtered.map((u, i) => {
             const isMe = Number(u.id) === Number(user.id);
             const medal = u.position <= 3 ? MEDALS[u.position - 1] : null;
+            // Animación escalonada solo en la carga normal (no al filtrar buscando)
+            const rowStyle = search
+              ? undefined
+              : { animationDelay: `${Math.min(i, 14) * 35}ms`, animationFillMode: 'backwards' };
 
             return (
               <div
                 key={u.id}
+                style={rowStyle}
                 className={`card flex items-center gap-3 py-3 transition-all ${
-                  isMe ? 'ring-2 ring-wc-blue shadow-wc' : ''
-                }`}
+                  search ? '' : 'animate-slide-up'
+                } ${isMe ? 'ring-2 ring-wc-blue shadow-wc' : ''}`}
               >
-                {/* Position */}
-                <div className="w-8 text-center flex-shrink-0">
+                {/* Position + movimiento */}
+                <div className="w-8 flex flex-col items-center justify-center flex-shrink-0 gap-0.5">
                   {medal ? (
                     <span className="text-xl">{medal}</span>
                   ) : (
@@ -149,6 +193,7 @@ export default function Ranking() {
                       #{u.position}
                     </span>
                   )}
+                  <MovementBadge delta={u.delta} isNew={u.isNew} />
                 </div>
 
                 {/* Avatar */}

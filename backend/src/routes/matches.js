@@ -4,6 +4,7 @@ const admin = require('../middleware/admin');
 const { calculateGroupStandings, calculatePredictedStandings, awardGroupPositionPoints } = require('../utils/groupScoring');
 const { getUserPredictedAdvancement } = require('../utils/bracketSimulation');
 const liveService = require('../services/liveMatchService');
+const { captureIfExpired } = require('../utils/rankingSnapshot');
 const prisma = require('../lib/prisma');
 
 // ── SSE: live match updates ────────────────────────────────────────
@@ -189,6 +190,10 @@ router.put('/:id/result', auth, admin, async (req, res) => {
   const pw = (penaltyWinner && ['home','away'].includes(penaltyWinner)) ? penaltyWinner : null;
 
   try {
+    // Foto de las posiciones ANTES de recalcular, para las flechitas de
+    // subida/bajada (solo si no hay una ventana de movimiento ya activa).
+    if (finalStatus === 'finished') await captureIfExpired();
+
     const match = await prisma.match.update({
       where: { id: matchId },
       data: {
