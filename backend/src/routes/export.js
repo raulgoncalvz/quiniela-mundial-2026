@@ -118,10 +118,13 @@ router.get('/excel', auth, admin, async (req, res) => {
     const PHASE_ORDER     = ['round32', 'round16', 'quarters', 'semis', 'third', 'final'];
 
     // Stats para la hoja de participantes
+    const groupMatchIds = groupMatches.map(m => m.id);
     const userStats = users.map(u => {
       const myPreds   = Object.keys(predMap[u.id] || {}).length;
       const hasChamp  = !!(cpMap[u.id]?.champion);
-      const hasGroups = Object.keys(gpMap[u.id] || {}).length;
+      // Las posiciones de grupo se derivan de los marcadores; marcamos ✓ si el
+      // usuario pronosticó todos los partidos de grupo (orden 1º-4º calculable).
+      const hasGroups = groupMatchIds.length > 0 && groupMatchIds.every(id => predMap[u.id]?.[id]);
       const total     = matches.length;
       const pct       = total > 0 ? Math.round((myPreds / total) * 100) : 0;
       return { ...u, myPreds, hasChamp, hasGroups, total, pct };
