@@ -3,6 +3,7 @@ const ExcelJS = require('exceljs');
 const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
 const { getUserPredictedAdvancement } = require('../utils/bracketSimulation');
+const { sortByFifaRules } = require('../utils/groupScoring');
 const prisma = require('../lib/prisma');
 
 // ── Paleta ───────────────────────────────────────────────────────────
@@ -233,7 +234,104 @@ router.get('/excel', auth, admin, async (req, res) => {
     ws2.protect('Mundial2026', { selectLockedCells: true, selectUnlockedCells: false });
 
     // ════════════════════════════════════════════════════════════════
-    // HOJA 3 — ELIMINATORIAS (con equipos derivados del bracket)
+    // HOJA 3 — POSICIONES DE GRUPO (cómo cada participante ordenó cada grupo)
+    // ════════════════════════════════════════════════════════════════
+    const ws3 = wb.addWorksheet('📊 Posiciones de Grupo', { views: [{ state: 'frozen', xSplit: 2, ySplit: 4 }] });
+    const cols3 = 2 + users.length;
+    applyTitle(ws3, '📊 POSICIONES DE GRUPO — PRONÓSTICOS', cols3);
+
+    // Equipos de cada grupo (id, nombre, bandera) tomados de los partidos de grupo.
+    const groupTeams = {};
+    for (const m of groupMatches) {
+      const g = m.group;
+      if (!groupTeams[g]) groupTeams[g] = {};
+      if (m.homeTeam) groupTeams[g][m.homeTeam.id] = m.homeTeam;
+      if (m.awayTeam) groupTeams[g][m.awayTeam.id] = m.awayTeam;
+    }
+
+    // Orden pronosticado por cada usuario en cada grupo, calculado desde sus
+    // marcadores con las reglas de desempate FIFA (igual que el sistema de puntos).
+    // Las posiciones no se guardan hasta que el grupo termina, así que se derivan.
+    function predictedOrder(userId, grp) {
+      const teamsMap = groupTeams[grp] || {};
+      const stats = {};
+      for (const t of Object.values(teamsMap)) {
+        stats[t.id] = { id: t.id, name: t.name, team: t, gf: 0, ga: 0, pts: 0 };
+      }
+      const scored = [];
+      for (const m of groupMatches) {
+        if (m.group !== grp) continue;
+        const p = predMap[userId]?.[m.id];
+        if (!p) continue;
+        const home = stats[m.homeTeamId], away = stats[m.awayTeamId];
+        if (!home || !away) continue;
+        home.gf += p.homeScore; home.ga += p.awayScore;
+        away.gf += p.awayScore; away.ga += p.homeScore;
+        if (p.homeScore > p.awayScore)      home.pts += 3;
+        else if (p.homeScore < p.awayScore) away.pts += 3;
+        else { home.pts++; away.pts++; }
+        scored.push({ homeTeamId: m.homeTeamId, awayTeamId: m.awayTeamId, homeScore: p.homeScore, awayScore: p.awayScore });
+      }
+      if (scored.length === 0) return null; // el usuario no pronosticó este grupo
+      return sortByFifaRules(Object.values(stats), scored);
+    }
+
+    // Precalcular para cada usuario/grupo (evita recomputar en cada una de las 4 filas).
+    const orderCache = {};
+    for (const u of users) {
+      for (const grp of GROUP_LETTERS) orderCache[`${u.id}_${grp}`] = predictedOrder(u.id, grp);
+    }
+
+    ws3.getRow(4).height = 24;
+    ['Grupo', 'Posición'].concat(users.map(u => u.name)).forEach((h, i) => {
+      const c = ws3.getCell(4, i + 1);
+      c.value = h;
+      c.style = hStyle(C.blue);
+    });
+    ws3.columns = [
+      { width: 8 }, { width: 12 },
+      ...users.map(() => ({ width: 18 })),
+    ];
+
+    const POS_LABELS = ['🥇 1°', '🥈 2°', '🥉 3°', '4°'];
+
+    let r3 = 5;
+    for (const grp of GROUP_LETTERS) {
+      ws3.mergeCells(r3, 1, r3, cols3);
+      const gc = ws3.getCell(r3, 1);
+      gc.value = `GRUPO ${grp}`;
+      gc.style = hStyle(C.red);
+      ws3.getRow(r3).height = 16;
+      r3++;
+
+      for (let pi = 0; pi < 4; pi++) {
+        const bg = r3 % 2 === 0 ? C.white : C.lightGray;
+
+        const grpCell = ws3.getCell(r3, 1);
+        grpCell.value = grp;
+        grpCell.style = dStyle(bg, C.dark, true);
+
+        const posCell = ws3.getCell(r3, 2);
+        posCell.value = POS_LABELS[pi];
+        posCell.style = dStyle(pi === 0 ? C.paleGold : bg, C.dark, true, 'left');
+
+        users.forEach((u, ui) => {
+          const order = orderCache[`${u.id}_${grp}`];
+          const t     = order ? order[pi]?.team : null;
+          const cell  = ws3.getCell(r3, 3 + ui);
+          cell.value  = t ? `${t.flag || ''} ${t.name}`.trim() : '—';
+          cell.style  = predStyle(!!t);
+        });
+
+        ws3.getRow(r3).height = 18;
+        r3++;
+      }
+    }
+
+    ws3.protect('Mundial2026', { selectLockedCells: true, selectUnlockedCells: false });
+
+    // ════════════════════════════════════════════════════════════════
+    // HOJA 4 — ELIMINATORIAS (con equipos derivados del bracket)
     // ════════════════════════════════════════════════════════════════
     const ws4 = wb.addWorksheet('🏆 Eliminatorias', { views: [{ state: 'frozen', xSplit: 3, ySplit: 4 }] });
     const cols4 = 3 + users.length;
