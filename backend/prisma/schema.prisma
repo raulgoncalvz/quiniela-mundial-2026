@@ -102,6 +102,15 @@ model ChampionPrediction {
   user           User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+// Ganador oficial de cada apuesta especial (se define una sola vez al final del
+// torneo). Una fila por campo: champion, runnerUp, third, topScorer, bestPlayer,
+// bestGoalkeeper. Persiste la selección del admin para que quede guardada y visible.
+model OfficialResult {
+  field     String   @id
+  winner    String   @default("")
+  updatedAt DateTime @updatedAt
+}
+
 model AdvancementPrediction {
   id       Int    @id @default(autoincrement())
   userId   Int

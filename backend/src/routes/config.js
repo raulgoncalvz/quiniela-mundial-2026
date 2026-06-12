@@ -308,11 +308,72 @@ router.post('/scoring/recalculate', auth, admin, async (req, res) => {
   }
 });
 
+// GET /api/config/champion/options — distinct values chosen by participants per
+// special-bet field, with how many users picked each. Feeds the admin dropdowns
+// so the winner is selected (not typed), guaranteeing an exact points match.
+router.get('/champion/options', auth, admin, async (req, res) => {
+  try {
+    const preds = await prisma.championPrediction.findMany({
+      where: { user: { role: { not: 'admin' } } },
+      select: {
+        champion: true, runnerUp: true, third: true,
+        topScorer: true, bestPlayer: true, bestGoalkeeper: true,
+      },
+    });
+
+    const fields = ['champion', 'runnerUp', 'third', 'topScorer', 'bestPlayer', 'bestGoalkeeper'];
+    const out = {};
+    for (const f of fields) {
+      const counts = {};
+      for (const p of preds) {
+        const v = (p[f] || '').trim();
+        if (!v) continue;
+        counts[v] = (counts[v] || 0) + 1;
+      }
+      out[f] = Object.entries(counts)
+        .map(([value, count]) => ({ value, count }))
+        .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+    }
+
+    res.json(out);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
+const BET_FIELDS = ['champion', 'runnerUp', 'third', 'topScorer', 'bestPlayer', 'bestGoalkeeper'];
+
+// GET /api/config/champion/results — official winners saved by the admin, so the
+// dropdowns reload already showing what was chosen.
+router.get('/champion/results', auth, admin, async (req, res) => {
+  try {
+    const rows = await prisma.officialResult.findMany();
+    const out = { champion: '', runnerUp: '', third: '', topScorer: '', bestPlayer: '', bestGoalkeeper: '' };
+    for (const r of rows) if (r.field in out) out[r.field] = r.winner;
+    res.json(out);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
 // POST /api/config/champion/calculate — assign points for special bets
 router.post('/champion/calculate', auth, admin, async (req, res) => {
   const { champion, runnerUp, third, topScorer, bestPlayer, bestGoalkeeper } = req.body;
 
   try {
+    // Persist the chosen winners so they stay saved and visible after reload.
+    const winners = { champion, runnerUp, third, topScorer, bestPlayer, bestGoalkeeper };
+    for (const field of BET_FIELDS) {
+      const winner = (winners[field] || '').trim();
+      await prisma.officialResult.upsert({
+        where: { field },
+        update: { winner },
+        create: { field, winner },
+      });
+    }
+
     // Load scoring config for special bets
     const cfgList = await prisma.scoringConfig.findMany({
       where: { phase: { in: ['bet_champion','bet_runnerUp','bet_third','bet_topScorer','bet_bestPlayer','bet_goalkeeper'] } },

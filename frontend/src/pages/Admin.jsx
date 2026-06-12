@@ -35,6 +35,7 @@ export default function Admin() {
   const [recalculating, setRecalculating] = useState(false);
   const [syncingPodiums, setSyncingPodiums] = useState(false);
   const [champForm, setChampForm] = useState({ champion:'', runnerUp:'', third:'', topScorer:'', bestPlayer:'', bestGoalkeeper:'' });
+  const [champOptions, setChampOptions] = useState({ champion:[], runnerUp:[], third:[], topScorer:[], bestPlayer:[], bestGoalkeeper:[] });
   const [calculatingChamp, setCalculatingChamp] = useState(false);
   const [derivingChamp, setDerivingChamp] = useState(false);
   const [users, setUsers] = useState([]);
@@ -149,6 +150,24 @@ export default function Admin() {
     }
   };
 
+  const loadChampOptions = async () => {
+    try {
+      const { data } = await api.get('/config/champion/options');
+      setChampOptions(data);
+    } catch {
+      /* las opciones son auxiliares; no bloquean la pantalla */
+    }
+  };
+
+  const loadChampResults = async () => {
+    try {
+      const { data } = await api.get('/config/champion/results');
+      setChampForm(prev => ({ ...prev, ...data }));
+    } catch {
+      /* si no hay ganadores guardados aún, se quedan los campos vacíos */
+    }
+  };
+
   const handleScoringChange = (phase, field, value) => {
     setScoringConfigs(prev => prev.map(c =>
       c.phase === phase ? { ...c, [field]: value } : c
@@ -242,7 +261,7 @@ export default function Admin() {
     setCalculatingChamp(true);
     try {
       const { data } = await api.post('/config/champion/calculate', champForm, { timeout: 180000 });
-      toast.success(`✅ Puntos especiales asignados a ${data.updated} usuarios`);
+      toast.success(`✅ Ganadores guardados y puntos asignados a ${data.updated} usuarios`);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al calcular');
     } finally {
@@ -422,7 +441,7 @@ export default function Admin() {
   };
 
   useEffect(() => {
-    if (phase === 'scoring') loadScoringConfigs();
+    if (phase === 'scoring') { loadScoringConfigs(); loadChampOptions(); loadChampResults(); }
     else if (phase === 'users') loadUsers();
     else if (phase === 'trivia') loadTriviaQuestions();
     else loadMatches();
@@ -717,7 +736,8 @@ export default function Admin() {
           <div className="card border border-wc-gold bg-amber-50">
             <h3 className="font-bold text-amber-900 mb-1">🏅 Asignar Ganadores Reales</h3>
             <p className="text-xs text-amber-700 mb-3">
-              Ingresa los ganadores reales y calcula los puntos de todos los usuarios
+              Selecciona el ganador real de cada apuesta y guarda. Queda guardado y se muestra
+              al volver a entrar; los puntos se suman a todos los que acertaron.
             </p>
             <button onClick={handleDeriveChampion} disabled={derivingChamp}
               className="w-full mb-3 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-900 font-bold text-xs transition-all flex items-center justify-center gap-2">
@@ -725,28 +745,44 @@ export default function Admin() {
             </button>
             <div className="space-y-2">
               {[
-                { key: 'champion',       label: '🏆 Campeón',       placeholder: 'País campeón' },
-                { key: 'runnerUp',       label: '🥈 Finalista',      placeholder: 'País finalista' },
-                { key: 'third',          label: '🥉 3er Lugar',       placeholder: 'País 3er lugar' },
-                { key: 'topScorer',      label: '⚽ Bota de Oro',     placeholder: 'Nombre del goleador' },
-                { key: 'bestPlayer',     label: '🌟 Balón de Oro',    placeholder: 'Nombre del mejor jugador' },
-                { key: 'bestGoalkeeper', label: '🧤 Mejor Portero',   placeholder: 'Nombre del mejor portero' },
-              ].map(({ key, label, placeholder }) => (
-                <div key={key}>
-                  <label className="text-xs font-bold text-amber-800 block mb-1">{label}</label>
-                  <input
-                    type="text"
-                    placeholder={placeholder}
-                    value={champForm[key]}
-                    onChange={e => setChampForm(prev => ({ ...prev, [key]: e.target.value }))}
-                    className="w-full text-sm rounded-xl border border-amber-200 py-2 px-3 focus:ring-2 focus:ring-amber-400 outline-none bg-white"
-                  />
-                </div>
-              ))}
+                { key: 'champion',       label: '🏆 Campeón' },
+                { key: 'runnerUp',       label: '🥈 Finalista' },
+                { key: 'third',          label: '🥉 3er Lugar' },
+                { key: 'topScorer',      label: '⚽ Bota de Oro' },
+                { key: 'bestPlayer',     label: '🌟 Balón de Oro' },
+                { key: 'bestGoalkeeper', label: '🧤 Mejor Portero' },
+              ].map(({ key, label }) => {
+                const opts = champOptions[key] || [];
+                const current = champForm[key];
+                const currentMissing = current && !opts.some(o => o.value === current);
+                return (
+                  <div key={key}>
+                    <label className="text-xs font-bold text-amber-800 block mb-1">
+                      {label}
+                      {opts.length > 0 && (
+                        <span className="font-normal text-amber-600"> · {opts.length} opciones</span>
+                      )}
+                    </label>
+                    <select
+                      value={current}
+                      onChange={e => setChampForm(prev => ({ ...prev, [key]: e.target.value }))}
+                      className="w-full text-sm rounded-xl border border-amber-200 py-2 px-3 focus:ring-2 focus:ring-amber-400 outline-none bg-white"
+                    >
+                      <option value="">— Seleccionar ganador —</option>
+                      {currentMissing && <option value={current}>{current} (actual)</option>}
+                      {opts.map(o => (
+                        <option key={o.value} value={o.value}>
+                          {o.value} · {o.count} {o.count === 1 ? 'voto' : 'votos'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
             </div>
             <button onClick={handleCalculateChamp} disabled={calculatingChamp}
               className="w-full mt-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm transition-all flex items-center justify-center gap-2">
-              {calculatingChamp ? <Spinner size="sm" color="white" /> : '⚡ Calcular Puntos Especiales'}
+              {calculatingChamp ? <Spinner size="sm" color="white" /> : '💾 Guardar y Calcular Puntos Especiales'}
             </button>
           </div>
 
