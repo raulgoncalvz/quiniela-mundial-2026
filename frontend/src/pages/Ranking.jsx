@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/axios';
 import Spinner from '../components/Spinner';
+import Avatar from '../components/Avatar';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
@@ -43,9 +44,11 @@ function PodiumCard({ user, position }) {
   return (
     <div className={`flex flex-col items-center ${sizes[position]}`}>
       <div className="text-center mb-2">
-        <div className={`w-14 h-14 rounded-full bg-wc-blue flex items-center justify-center text-white text-xl font-black mb-1 mx-auto ${position === 1 ? 'w-16 h-16' : ''}`}>
-          {user.name.charAt(0).toUpperCase()}
-        </div>
+        <Avatar
+          name={user.name}
+          src={user.avatar}
+          className={`bg-wc-blue text-white text-xl font-black mb-1 mx-auto ring-2 ring-white shadow-md ${position === 1 ? 'w-16 h-16' : 'w-14 h-14'}`}
+        />
         <p className={`font-bold text-wc-dark truncate max-w-[80px] text-center ${position === 1 ? 'text-sm' : 'text-xs'}`}>
           {user.name.split(' ')[0]}
         </p>
@@ -197,11 +200,13 @@ export default function Ranking() {
                 </div>
 
                 {/* Avatar */}
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black flex-shrink-0 ${
-                  isMe ? 'bg-wc-blue text-white' : 'bg-wc-light-bg text-wc-dark'
-                }`}>
-                  {u.name.charAt(0).toUpperCase()}
-                </div>
+                <Avatar
+                  name={u.name}
+                  src={u.avatar}
+                  className={`w-11 h-11 text-base font-black flex-shrink-0 ${
+                    isMe ? 'bg-wc-blue text-white ring-2 ring-wc-blue/30' : 'bg-wc-light-bg text-wc-dark'
+                  }`}
+                />
 
                 {/* Name & stats */}
                 <div className="flex-1 min-w-0">

@@ -42,6 +42,7 @@ async function computeRanking() {
       return {
         id: user.id,
         name: user.name,
+        avatar: user.avatar,
         role: user.role,
         totalPoints: matchPoints + champPoints + groupPoints + advPoints,
         matchPoints,

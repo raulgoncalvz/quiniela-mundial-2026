@@ -1,8 +1,35 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/axios';
 import Spinner from '../components/Spinner';
+import Avatar from '../components/Avatar';
+
+// Recorta la imagen a un cuadrado centrado y la reduce a 256px en JPEG,
+// para guardarla liviana (~20-30KB) como data URL en el perfil.
+function compressImage(file, size = 256, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const side = Math.min(img.width, img.height);
+        const sx = (img.width - side) / 2;
+        const sy = (img.height - side) / 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function Perfil() {
   const { user, logout, updateUser } = useAuth();
@@ -14,6 +41,8 @@ export default function Perfil() {
   const [passForm, setPassForm] = useState({ password: '', newPassword: '', confirm: '' });
   const [saving, setSaving] = useState(false);
   const [showPassForm, setShowPassForm] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     Promise.all([
@@ -66,6 +95,40 @@ export default function Perfil() {
     }
   };
 
+  const handlePhotoChange = async e => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permite re-subir el mismo archivo
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Selecciona una imagen');
+      return;
+    }
+    setUploadingPhoto(true);
+    try {
+      const dataUrl = await compressImage(file);
+      const { data } = await api.put('/auth/profile', { avatar: dataUrl });
+      updateUser(data);
+      toast.success('Foto actualizada');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al subir la foto');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    setUploadingPhoto(true);
+    try {
+      const { data } = await api.put('/auth/profile', { avatar: '' });
+      updateUser(data);
+      toast.success('Foto eliminada');
+    } catch (err) {
+      toast.error('Error al eliminar la foto');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
   const statsItems = stats ? [
     { label: 'Pronósticos', value: stats.totalPredictions, icon: '📝', color: 'text-wc-blue' },
     { label: 'Exactos', value: stats.exactScores, icon: '⭐', color: 'text-amber-600' },
@@ -79,9 +142,48 @@ export default function Perfil() {
 
       {/* Profile card */}
       <div className="bg-wc-gradient rounded-3xl p-6 mb-4 text-white text-center">
-        <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center text-3xl font-black mx-auto mb-3">
-          {user.name.charAt(0).toUpperCase()}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handlePhotoChange}
+        />
+        <div className="relative w-24 h-24 mx-auto mb-3">
+          <button
+            type="button"
+            onClick={() => !uploadingPhoto && fileInputRef.current?.click()}
+            className="w-full h-full rounded-full block"
+            title="Cambiar foto"
+          >
+            <Avatar
+              name={user.name}
+              src={user.avatar}
+              className="w-24 h-24 bg-white/20 text-4xl font-black ring-4 ring-white/30"
+            />
+            {uploadingPhoto && (
+              <span className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
+                <Spinner size="sm" color="white" />
+              </span>
+            )}
+          </button>
+          {/* Badge de cámara */}
+          <span className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-white text-wc-blue flex items-center justify-center shadow-md pointer-events-none">
+            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+              <path d="M9 3l-1.5 2H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.5L15 3H9zm3 5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" />
+            </svg>
+          </span>
         </div>
+        {user.avatar && (
+          <button
+            type="button"
+            onClick={handleRemovePhoto}
+            disabled={uploadingPhoto}
+            className="text-xs text-white/70 hover:text-white underline mb-2 disabled:opacity-50"
+          >
+            Quitar foto
+          </button>
+        )}
         <h2 className="text-xl font-black">{user.name}</h2>
         <p className="text-sm opacity-70">{user.email}</p>
         {ranking && (

@@ -13,7 +13,7 @@ function signToken(user) {
 }
 
 function safeUser(u) {
-  return { id: u.id, name: u.name, username: u.username, email: u.email, role: u.role };
+  return { id: u.id, name: u.name, username: u.username, email: u.email, role: u.role, avatar: u.avatar };
 }
 
 // POST /api/auth/register
@@ -74,7 +74,7 @@ router.get('/me', auth, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: { id: true, name: true, username: true, email: true, role: true, createdAt: true },
+      select: { id: true, name: true, username: true, email: true, role: true, avatar: true, createdAt: true },
     });
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.json(user);
@@ -85,7 +85,7 @@ router.get('/me', auth, async (req, res) => {
 
 // PUT /api/auth/profile
 router.put('/profile', auth, async (req, res) => {
-  const { name, password, newPassword } = req.body;
+  const { name, password, newPassword, avatar } = req.body;
 
   try {
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });
@@ -93,6 +93,17 @@ router.put('/profile', auth, async (req, res) => {
 
     const updateData = {};
     if (name) updateData.name = name.trim();
+
+    // Foto de perfil: data URL de imagen para guardar, o cadena vacía/null para quitar
+    if (avatar !== undefined) {
+      if (avatar && !/^data:image\/(png|jpe?g|webp);base64,/.test(avatar)) {
+        return res.status(400).json({ error: 'Formato de imagen no válido' });
+      }
+      if (avatar && avatar.length > 3_000_000) {
+        return res.status(413).json({ error: 'La imagen es demasiado grande' });
+      }
+      updateData.avatar = avatar || null;
+    }
 
     if (newPassword) {
       if (!password) return res.status(400).json({ error: 'Se requiere la contraseña actual' });
@@ -106,7 +117,7 @@ router.put('/profile', auth, async (req, res) => {
     const updated = await prisma.user.update({
       where: { id: req.user.id },
       data: updateData,
-      select: { id: true, name: true, username: true, email: true, role: true },
+      select: { id: true, name: true, username: true, email: true, role: true, avatar: true },
     });
 
     res.json(updated);

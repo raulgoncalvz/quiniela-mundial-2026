@@ -29,7 +29,7 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: '3mb' })); // margen para fotos de perfil en base64
 
 // Rate limit por usuario autenticado (cae a IP si no hay token válido).
 // La quiniela genera muchas peticiones legítimas al llenarse, así que el
