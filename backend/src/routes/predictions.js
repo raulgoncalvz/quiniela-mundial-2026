@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const jwt = require('jsonwebtoken');
 const auth = require('../middleware/auth');
 const THIRD_PLACE_COMBINATIONS = require('../combinaciones.json');
 const { sortByFifaRules } = require('../utils/groupScoring');
@@ -13,6 +14,21 @@ async function isLocked() {
   } catch {
     return false;
   }
+}
+
+// Excepción por usuario: un participante con predictionsUnlocked puede guardar
+// SOLO predicciones faltantes — el partido sigue pending y no tiene predicción
+// previa. Así puede completar su bracket sin poder modificar lo ya cargado.
+async function canBypassLock(userId, matchId) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { predictionsUnlocked: true },
+  });
+  if (!user?.predictionsUnlocked) return false;
+  const existing = await prisma.prediction.findUnique({
+    where: { userId_matchId: { userId, matchId } },
+  });
+  return !existing;
 }
 
 // GET /api/predictions — all user predictions
@@ -31,15 +47,30 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// GET /api/predictions/lock
+// GET /api/predictions/lock — estado de bloqueo. Auth opcional: si viene un token
+// válido, agrega unlockedForMe para que ese usuario pueda editar sus faltantes.
 router.get('/lock', async (req, res) => {
   try {
     const firstMatch = await prisma.match.findFirst({ orderBy: { date: 'asc' } });
-    if (!firstMatch) return res.json({ locked: false, lockTime: null });
-    const lockTime = new Date(firstMatch.date.getTime() - 60 * 60 * 1000);
-    res.json({ locked: new Date() >= lockTime, lockTime });
+    const lockTime = firstMatch ? new Date(firstMatch.date.getTime() - 60 * 60 * 1000) : null;
+    const locked = lockTime ? new Date() >= lockTime : false;
+
+    let unlockedForMe = false;
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET);
+        const u = await prisma.user.findUnique({
+          where: { id: decoded.id },
+          select: { predictionsUnlocked: true },
+        });
+        unlockedForMe = !!u?.predictionsUnlocked;
+      } catch { /* token inválido → sin excepción */ }
+    }
+
+    res.json({ locked, lockTime, unlockedForMe });
   } catch {
-    res.json({ locked: false, lockTime: null });
+    res.json({ locked: false, lockTime: null, unlockedForMe: false });
   }
 });
 
@@ -55,7 +86,7 @@ router.post('/', auth, async (req, res) => {
   if (penaltyWinner !== undefined && penaltyWinner !== null && !['home','away'].includes(penaltyWinner))
     return res.status(400).json({ error: 'penaltyWinner debe ser "home" o "away"' });
 
-  if (await isLocked())
+  if (await isLocked() && !(await canBypassLock(req.user.id, parseInt(matchId))))
     return res.status(423).json({ error: 'Las predicciones están bloqueadas. El torneo ya comenzó.' });
 
   try {
@@ -86,8 +117,7 @@ router.post('/batch', auth, async (req, res) => {
   if (!Array.isArray(predictions) || predictions.length === 0)
     return res.status(400).json({ error: 'Se requiere un array de predicciones' });
 
-  if (await isLocked())
-    return res.status(423).json({ error: 'Las predicciones están bloqueadas. El torneo ya comenzó.' });
+  const locked = await isLocked();
 
   try {
     const results = [];
@@ -97,6 +127,10 @@ router.post('/batch', auth, async (req, res) => {
       const { matchId, homeScore, awayScore, penaltyWinner } = pred;
       const pw = (penaltyWinner && ['home','away'].includes(penaltyWinner)) ? penaltyWinner : null;
       try {
+        if (locked && !(await canBypassLock(req.user.id, parseInt(matchId)))) {
+          errors.push({ matchId, error: 'Predicción bloqueada' });
+          continue;
+        }
         const match = await prisma.match.findUnique({ where: { id: parseInt(matchId) } });
         if (!match || match.status !== 'pending') {
           errors.push({ matchId, error: 'Partido no disponible' });

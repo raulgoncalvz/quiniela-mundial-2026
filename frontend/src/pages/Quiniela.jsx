@@ -208,9 +208,15 @@ export default function Quiniela() {
 
       {/* Lock banner */}
       {lockInfo?.locked && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold text-center">
-          🔒 Las predicciones están bloqueadas — el torneo ya comenzó
-        </div>
+        lockInfo?.unlockedForMe ? (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-semibold text-center">
+            🔓 Habilitado por el admin para completar tus pronósticos faltantes. Solo podés llenar los partidos que aún no pronosticaste.
+          </div>
+        ) : (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold text-center">
+            🔒 Las predicciones están bloqueadas — el torneo ya comenzó
+          </div>
+        )
       )}
 
       {/* Phase tabs */}
@@ -514,7 +520,7 @@ export default function Quiniela() {
                     match={enriched}
                     prediction={predictions[match.id]}
                     onSave={handleSavePrediction}
-                    readOnly={lockInfo?.locked}
+                    readOnly={lockInfo?.locked && !(lockInfo?.unlockedForMe && !predictions[match.id])}
                     liveMinute={live?.minute}
                   />
                 );

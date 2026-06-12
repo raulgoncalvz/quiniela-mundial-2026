@@ -15,6 +15,9 @@ model User {
   password               String
   plainPassword          String?
   role                   String                  @default("user")
+  // Excepción admin: permite a este usuario llenar predicciones faltantes
+  // (partidos pending sin predicción) aunque la quiniela esté bloqueada.
+  predictionsUnlocked    Boolean                 @default(false)
   createdAt              DateTime                @default(now())
   predictions            Prediction[]
   championPrediction     ChampionPrediction?
